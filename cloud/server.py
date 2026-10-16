@@ -2,6 +2,8 @@
 Set HF_TOKEN as a private Space secret. Never put it in the static Vite app.
 """
 import json
+import threading
+import time
 import os
 import urllib.request
 import urllib.error
@@ -10,6 +12,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 MODEL = os.getenv("HF_CHAT_MODEL", "openai/gpt-oss-20b:cheapest")
 ORIGIN = os.getenv("MECHANICAI_ALLOWED_ORIGIN", "https://qasammekai-mechanicai.hf.space")
 MAX_BYTES = 16000
+# Hard process-local cap; resets on restart and is NOT a substitute for provider spend limits.
+MAX_REQUESTS = int(os.getenv("MECHANICAI_MAX_REQUESTS", "20"))
+_lock = threading.Lock()
+_requests = 0
+
 SYSTEM = ("Du er MechanicAI, en hjælpsom dansk assistent til praktiske opgaver. "
           "Før en naturlig dialog, stil kun nødvendige opfølgende spørgsmål. "
           "Skeln mellem generel viden og verificeret dokumentation. "
@@ -29,6 +36,14 @@ def make_messages(raw):
             raise ValueError("Ugyldigt beskedindhold.")
         messages.append({"role": entry["role"], "content": content})
     return messages
+
+def reserve_request():
+    global _requests
+    with _lock:
+        if _requests >= MAX_REQUESTS:
+            return False
+        _requests += 1
+        return True
 
 def complete(messages):
     token = os.getenv("HF_TOKEN")
@@ -64,13 +79,16 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
     def do_GET(self):
         self.respond(200 if self.path == "/health" else 404,
-                     {"status": "ok", "configured": bool(os.getenv("HF_TOKEN"))} if self.path == "/health" else {"error": "Not found"})
+                     {"status": "ok", "configured": bool(os.getenv("HF_TOKEN")), "enabled": os.getenv("MECHANICAI_CLOUD_ENABLED") == "true"} if self.path == "/health" else {"error": "Not found"})
     def do_POST(self):
         if self.path != "/chat":
             self.respond(404, {"error": "Not found"})
             return
         if self.headers.get("Origin") != ORIGIN:
             self.respond(403, {"error": "Origin not allowed"})
+            return
+        if os.getenv("MECHANICAI_CLOUD_ENABLED") != "true":
+            self.respond(503, {"error": "Cloud-AI er endnu ikke aktiveret."})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -79,6 +97,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             data = json.loads(self.rfile.read(length))
             messages = make_messages(data.get("messages"))
+            if not reserve_request():
+                self.respond(429, {"error": "AI-testkvoten er opbrugt."})
+                return
             reply = complete(messages)
             self.respond(200, {"reply": reply})
         except (ValueError, KeyError, TypeError):
