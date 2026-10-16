@@ -64,11 +64,40 @@ export default function App() {
   const [reset,setReset]=useState(0);
   const [message,setMessage]=useState("Vælg en del i 3D eller brug en af knapperne.");
   const [listening,setListening]=useState(false);
+  const [guideStep,setGuideStep]=useState(-1);
+  const [voiceEnabled,setVoiceEnabled]=useState(true);
+  const steps=[
+    {part:"drain",text:"Trin 1. Find bundproppen i vores demonstrationsmodel. Den orange markering viser kun en illustrativ placering, ikke din Suzukis faktiske bundprop."},
+    {part:"sump",text:"Trin 2. Se bundkarret. Reservedelskataloget angiver et delnummer, men vi har endnu ikke verificeret motorens geometri."},
+    {part:"filter",text:"Trin 3. Find oliefilteret i demonstrationsmodellen. Dets placering er endnu ikke verificeret mod din motorcykel."},
+    {part:null,text:"Trin 4. Demonstrationen er slut. Før en rigtig reparation skal vi verificere modelvariant, manual, komponentplacering og sikkerhedsforhold."}
+  ];
+  function say(text) {
+    if(!voiceEnabled || !("speechSynthesis" in window))return;
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);u.lang="da-DK";u.rate=0.92;
+    window.speechSynthesis.speak(u);
+  }
+  function goStep(index) {
+    if(index<0||index>=steps.length)return;
+    const step=steps[index];setGuideStep(index);
+    setSelected(step.part);setMessage(step.text);say(step.text);
+  }
+  function stopGuide() {
+    if("speechSynthesis" in window)window.speechSynthesis.cancel();
+    if(recognition.current)recognition.current.abort();
+    setListening(false);setGuideStep(-1);setMessage("Guiden er stoppet.");
+  }
+  useEffect(()=>()=>{if("speechSynthesis" in window)window.speechSynthesis.cancel();if(recognition.current)recognition.current.abort();},[]);
   const recognition=useRef(null);
-  function selectPart(id) {setSelected(id);setMessage(PARTS[id].detail);}
+  function selectPart(id) {setSelected(id);setMessage(PARTS[id].detail);say(PARTS[id].title+". "+PARTS[id].detail);}
   function command(input) {
     const s=input.toLocaleLowerCase("da-DK");
-    if (/bundprop|olieprop|bolt/.test(s)) selectPart("drain");
+    if (/stop|afbryd|hold op/.test(s)) stopGuide();
+    else if (/gentag|sig det igen/.test(s)) {if(guideStep>=0)say(steps[guideStep].text);else say(message);}
+    else if (/næste|videre|fortsæt/.test(s)) goStep(guideStep<0?0:Math.min(guideStep+1,steps.length-1));
+    else if (/start guide|start vejledning|hjælp mig/.test(s)) goStep(0);
+    else if (/bundprop|olieprop|bolt/.test(s)) selectPart("drain");
     else if (/filter/.test(s)) selectPart("filter");
     else if (/bundkar/.test(s)) selectPart("sump");
     else if (/topstykke|toppen/.test(s)) selectPart("head");
@@ -87,14 +116,14 @@ export default function App() {
     } catch {setListening(false);setMessage("Mikrofonen kunne ikke startes.");}
   }
   return <main>
-    <header><div><h1>MechanicAI <small>V2.2 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
+    <header><div><h1>MechanicAI <small>V2.3 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
     <section className="workspace">
       <div className="viewer" aria-label="Interaktiv illustrativ 3D-motormodel">
         <Viewer selected={selected} onSelect={selectPart} reset={reset}/>
         <div className="viewer-tag">ILLUSTRATIV MODEL · IKKE SUZUKI</div>
       </div>
       <aside>
-        <h2>AI-mekaniker · V2.2</h2>
+        <h2>AI-mekaniker · V2.3</h2>
         <p className="notice">Dette er en interaktiv demonstration uden verificeret motorgeometri, servicemanual eller reparationsdata. Undlad at bruge placeringerne til arbejde på et køretøj.</p>
         <div className="part-info"><span className="eyebrow">VALGT KOMPONENT</span><strong>{selected ? PARTS[selected].title : "Ingen markering"}</strong><p>{selected ? PARTS[selected].detail : "Tryk på en del af modellen for at vælge den."}</p></div>
         <div className="part-info"><span className="eyebrow">KILDEBASERET RESERVEDELSREGISTER · 2019</span>
@@ -103,6 +132,10 @@ export default function App() {
         </div>
         <div className="reply" aria-live="polite">{message}</div>
         <div className="part-info"><span className="eyebrow">DOKUMENTATION · 2019 GSX-S1000F</span><p>Vi har fundet Suzukis officielle manualoversigt og en reservedelskatalog-reference til bundkar og olieaftapningsprop. Det dokumenterer delnumre, men ikke den præcise placering på vores 3D-demomodel.</p><a href="https://www.suzuki.nl/motoren/service/gebruikershandleidingen-motoren/" target="_blank" rel="noopener noreferrer">Suzuki: ejerhåndbøger</a><p><a href="https://www.pieces-suzuki.ca/suzuki-moto/1000-MOTO/GSX-S/2019/GSX-S1000FYA-L9-E21-/MOTEUR-TRANSMISSION/CARTER-INFERIEUR--POMPE-A-HUILE/2021000000/2021018533/M/10531" target="_blank" rel="noopener noreferrer">2019: reservedelskatalog for bundkar</a></p><p>Ingen bolte eller tilspændingsmomenter er verificeret i 3D endnu.</p></div>
+        <div className="part-info" aria-live="polite"><span className="eyebrow">STEMMESTYRET DEMOGUIDE</span><p>{guideStep>=0?"Trin "+(guideStep+1)+" af "+steps.length+": "+steps[guideStep].text:"Start et firetrins demonstrationsforløb med dansk oplæsning og 3D-fokus."}</p>
+          <div className="controls"><button className="primary" onClick={()=>goStep(0)}>▶ Start guide</button><button onClick={()=>goStep(Math.min(guideStep+1,steps.length-1))}>Næste</button><button onClick={()=>guideStep>=0?say(steps[guideStep].text):say(message)}>Gentag</button><button onClick={stopGuide}>Stop</button><button onClick={()=>{if(voiceEnabled&&"speechSynthesis" in window)window.speechSynthesis.cancel();setVoiceEnabled(v=>!v);}}>{voiceEnabled?"🔊 Tale til":"🔇 Tale fra"}</button></div>
+          <p className="hint">Prøv også mikrofonkommandoerne: “start guide”, “næste”, “gentag” og “stop”. Talegenkendelse og oplæsning afhænger af browseren. Ingen AI-genererede reparationsinstruktioner.</p>
+        </div>
         <div className="controls">
           <button className="primary" onClick={listen} disabled={listening}>{listening ? "🎙 Lytter…" : "🎙 Tal til modellen"}</button>
           <button onClick={()=>selectPart("drain")}>Vis bundproppen</button>
