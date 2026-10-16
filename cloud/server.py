@@ -2,6 +2,7 @@
 Set HF_TOKEN as a private Space secret. Never put it in the static Vite app.
 """
 import json
+import hmac
 import threading
 import time
 import os
@@ -75,7 +76,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", ORIGIN)
         self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-MechanicAI-Pilot-Key")
         self.end_headers()
     def do_GET(self):
         self.respond(200 if self.path == "/health" else 404,
@@ -86,6 +87,11 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.headers.get("Origin") != ORIGIN:
             self.respond(403, {"error": "Origin not allowed"})
+            return
+        pilot_key = os.getenv("MECHANICAI_PILOT_KEY", "")
+        supplied_key = self.headers.get("X-MechanicAI-Pilot-Key", "")
+        if not pilot_key or not hmac.compare_digest(supplied_key, pilot_key):
+            self.respond(401, {"error": "PoC-adgangskode mangler eller er forkert."})
             return
         if os.getenv("MECHANICAI_CLOUD_ENABLED") != "true":
             self.respond(503, {"error": "Cloud-AI er endnu ikke aktiveret."})
