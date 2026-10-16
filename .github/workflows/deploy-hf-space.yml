@@ -20,6 +20,7 @@ jobs:
       - name: Build static web app
         run: |
           npm install --no-audit --no-fund
+          npm test
           npm run build
           test -f dist/index.html
       - name: Install Hugging Face client
