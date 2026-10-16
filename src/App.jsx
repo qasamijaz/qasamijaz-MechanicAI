@@ -3,6 +3,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 import * as THREE from "three";
 import { referencesFor } from "./references";
+import { planTask } from "./modules/task-engine/index.js";
 import { OrbitControls, Grid } from "@react-three/drei";
 
 const USER_VEHICLE = { manufacturer: "Suzuki", model: "GSX-S1000F", year: 2020, firstRegistration: "2023-04-05", market: "DK", modelCode: "GSX-S1000FAM0" };
@@ -108,6 +109,8 @@ export default function App() {
     const answer="Jeg kan se, at du har tilføjet et billede, men denne version analyserer ikke billedets indhold. Jeg kan derfor ikke afgøre, hvilken bolt eller del der er vist. Brug et verificeret diagram eller få delen identificeret af en fagperson, før du løsner noget.";
     setMessage(answer);setHistory(h=>[...h.slice(-7),{q:"[Foto] "+(photoQuestion.trim()||"Hvad viser billedet?"),a:answer}]);say(answer);
   }
+  const [taskInput,setTaskInput]=useState("");
+  const [taskPlan,setTaskPlan]=useState(null);
   const [history,setHistory]=useState([]);
   const [showSources,setShowSources]=useState(true);
   const selectedRef=useRef("drain");
@@ -227,6 +230,25 @@ export default function App() {
   commandRef.current=command;
   return <main>
     <header><div><h1>MechanicAI <small>V2.9 LAB</small></h1><p>Suzuki GSX-S1000FAM0 · modelår 2020 · interaktiv demo</p></div><span className="status">Isoleret demo</span></header>
+    <section className="part-info" style={{marginBottom:"16px"}} aria-label="Universel opgavemotor">
+      <span className="eyebrow">NYT · UNIVERSAL OPGAVEMOTOR · OFFLINE DEMO</span>
+      <h2>Hvad vil du lave?</h2>
+      <p>Beskriv en opgave med tekst: skift olie, placér lamper, design et hegn eller tegn et hus. Motoren vælger et fagmodul og viser en foreløbig plan. Den genererer endnu ikke nye 3D-tegninger eller sikre arbejdsinstruktioner.</p>
+      <form onSubmit={e=>{e.preventDefault();setTaskPlan(planTask(taskInput));}}>
+        <input aria-label="Beskriv din opgave" placeholder="Fx: Design et hegn langs min indkørsel" value={taskInput} onChange={e=>setTaskInput(e.target.value)} style={{width:"100%",padding:"12px",borderRadius:"8px",marginBottom:"8px"}} />
+        <button className="primary" type="submit">Forstå opgaven</button>
+      </form>
+      <div className="controls" style={{marginTop:"8px"}}>
+        {["Skift olie på min motorcykel","Sæt tre lamper op","Design et hegn","Tegn et hus med fire værelser"].map(example=><button type="button" key={example} onClick={()=>{setTaskInput(example);setTaskPlan(planTask(example));}}>{example}</button>)}
+      </div>
+      {taskPlan && <div role="status" style={{marginTop:"12px"}}>
+        <strong>{taskPlan.label} · {taskPlan.mode}</strong>
+        <p>Foreløbig plan (ikke verificeret arbejdsvejledning):</p>
+        <ol>{taskPlan.preview.map((step,i)=><li key={i}>{step}</li>)}</ol>
+        <p><strong>Afklaring:</strong> {taskPlan.question}</p>
+        <p className="hint">Sikkerhed: {taskPlan.safety}. Dette er en regelbaseret prototype uden sprogmodel, automatisk CAD eller faglig godkendelse.</p>
+      </div>}
+    </section>
     <section className="workspace">
       <div>
         <div className="controls" style={{marginBottom:"10px"}}>
