@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 import * as THREE from "three";
+import { referencesFor } from "./references";
 import { OrbitControls, Grid } from "@react-three/drei";
 
 const PARTS = {
@@ -64,6 +65,7 @@ export default function App() {
   const [reset,setReset]=useState(0);
   const [question,setQuestion]=useState("");
   const [history,setHistory]=useState([]);
+  const [showSources,setShowSources]=useState(true);
   const selectedRef=useRef("drain");
   const [message,setMessage]=useState("Vælg en del i 3D eller brug en af knapperne.");
   const [listening,setListening]=useState(false);
@@ -141,7 +143,7 @@ export default function App() {
     }else{
       reply="Jeg kan hjælpe med komponenternes navne, demonstrationsvisning og dokumenterede reservedelsnumre. Spørg for eksempel: Hvor sidder oliefilteret? Eller: Hvilket reservedelsnummer har bundproppen?";
     }
-    setMessage(reply);setHistory(h=>[...h.slice(-7),{q:input,a:reply}]);say(reply);
+    setMessage(reply);setHistory(h=>[...h.slice(-7),{q:input,a:reply,part:id}]);say(reply);
   }
   function command(input) {
     const s=input.toLocaleLowerCase("da-DK");
@@ -179,14 +181,14 @@ export default function App() {
   listenRef.current=listen;
   commandRef.current=command;
   return <main>
-    <header><div><h1>MechanicAI <small>V2.5 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
+    <header><div><h1>MechanicAI <small>V2.6 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
     <section className="workspace">
       <div className="viewer" aria-label="Interaktiv illustrativ 3D-motormodel">
         <Viewer selected={selected} onSelect={selectPart} reset={reset}/>
         <div className="viewer-tag">ILLUSTRATIV MODEL · IKKE SUZUKI</div>
       </div>
       <aside>
-        <h2>AI-mekaniker · V2.5</h2>
+        <h2>AI-mekaniker · V2.6</h2>
         <p className="notice">Dette er en interaktiv demonstration uden verificeret motorgeometri, servicemanual eller reparationsdata. Undlad at bruge placeringerne til arbejde på et køretøj.</p>
         <div className="part-info"><span className="eyebrow">VALGT KOMPONENT</span><strong>{selected ? PARTS[selected].title : "Ingen markering"}</strong><p>{selected ? PARTS[selected].detail : "Tryk på en del af modellen for at vælge den."}</p></div>
         <div className="part-info"><span className="eyebrow">KILDEBASERET RESERVEDELSREGISTER · 2019</span>
@@ -194,6 +196,15 @@ export default function App() {
           <p className="hint">Delnummeret kommer fra et reservedelskatalog, ikke fra den viste 3D-geometri. Bekræft stelnummer og markedsvariant før bestilling eller reparation.</p>
         </div>
         <div className="reply" aria-live="polite">{message}</div>
+        <div className="part-info"><span className="eyebrow">DOKUMENTATIONSMOTOR · V2.6</span>
+          <p>Kilder knyttet til den valgte komponent. Det er et kurateret kildeindeks, ikke AI-søgning i fulde servicemanualer.</p>
+          <button onClick={()=>setShowSources(v=>!v)}>{showSources?"Skjul kilder":"Vis kilder"} ({selected?referencesFor(selected).length:0})</button>
+          {showSources && selected && referencesFor(selected).map(ref=><div key={ref.id} style={{padding:"8px 0",borderBottom:"1px solid #465366"}}>
+            <strong>{ref.title}</strong><p>{ref.publisher} · {ref.kind} · {ref.confidence}</p>
+            <a href={ref.url} target="_blank" rel="noopener noreferrer">Åbn originalkilde ↗</a>
+          </div>)}
+          <p className="hint">Kildernes indhold er ikke automatisk hentet eller fuldtekstverificeret. Brug ikke denne prototype som servicemanual.</p>
+        </div>
         <div className="part-info"><span className="eyebrow">SAMTALEPROTOTYPE · INGEN CLOUD-AI</span>
           <p>Stil spørgsmål på dansk. Denne version bruger kontrollerede svar og komponentdata – ikke en sprogmodel.</p>
           <form onSubmit={e=>{e.preventDefault();if(question.trim()){respond(question.trim());setQuestion("");}}}>
