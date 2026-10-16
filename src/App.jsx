@@ -67,6 +67,25 @@ export default function App() {
   const [photo,setPhoto]=useState(null);
   const [photoQuestion,setPhotoQuestion]=useState("");
   const [photoNotice,setPhotoNotice]=useState("Intet billede valgt.");
+  const [visionBusy,setVisionBusy]=useState(false);
+  const [visionResult,setVisionResult]=useState(null);
+  const visionModelRef=useRef(null);
+  async function analyzePhoto() {
+    if(!photo||visionBusy)return;
+    setVisionBusy(true);setVisionResult(null);
+    setPhotoNotice("Indlæser en generel billedklassifikationsmodel. Første gang kan det tage tid og hente modeldata.");
+    try {
+      if(!visionModelRef.current) {
+        const { pipeline }=await import("@huggingface/transformers");
+        visionModelRef.current=await pipeline("image-classification","onnx-community/mobilenetv4_conv_small.e2400_r224_in1k",{device:"wasm"});
+      }
+      const results=await visionModelRef.current(photo,{topk:3});
+      setVisionResult(results);
+      setPhotoNotice("Generel billedklassifikation fuldført lokalt. Resultatet kan IKKE bruges til at identificere motorbolte eller godkende reparation.");
+    }catch(error){
+      setPhotoNotice("Billedmodellen kunne ikke køre i denne browser: "+(error?.message||"ukendt fejl")+". Fotoet er stadig tilgængeligt.");
+    }finally{setVisionBusy(false);}
+  }
   const photoUrlRef=useRef(null);
   function choosePhoto(event) {
     const file=event.target.files?.[0];
@@ -74,13 +93,13 @@ export default function App() {
     if(!file.type.startsWith("image/")){setPhotoNotice("Vælg en billedfil.");return;}
     if(file.size>15*1024*1024){setPhotoNotice("Billedet må højst fylde 15 MB.");return;}
     if(photoUrlRef.current)URL.revokeObjectURL(photoUrlRef.current);
-    const url=URL.createObjectURL(file);photoUrlRef.current=url;setPhoto(url);
+    const url=URL.createObjectURL(file);photoUrlRef.current=url;setPhoto(url);setVisionResult(null);
     setPhotoNotice("Billedet vises kun lokalt i browseren. Der er ikke tilsluttet billedgenkendelse.");
     event.target.value="";
   }
   function clearPhoto() {
     if(photoUrlRef.current)URL.revokeObjectURL(photoUrlRef.current);
-    photoUrlRef.current=null;setPhoto(null);setPhotoQuestion("");setPhotoNotice("Billedet er fjernet.");
+    photoUrlRef.current=null;setPhoto(null);setVisionResult(null);setPhotoQuestion("");setPhotoNotice("Billedet er fjernet.");
   }
   function askAboutPhoto() {
     if(!photo)return;
@@ -205,14 +224,14 @@ export default function App() {
   listenRef.current=listen;
   commandRef.current=command;
   return <main>
-    <header><div><h1>MechanicAI <small>V2.7 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
+    <header><div><h1>MechanicAI <small>V2.8 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
     <section className="workspace">
       <div className="viewer" aria-label="Interaktiv illustrativ 3D-motormodel">
         <Viewer selected={selected} onSelect={selectPart} reset={reset}/>
         <div className="viewer-tag">ILLUSTRATIV MODEL · IKKE SUZUKI</div>
       </div>
       <aside>
-        <h2>AI-mekaniker · V2.7</h2>
+        <h2>AI-mekaniker · V2.8</h2>
         <p className="notice">Dette er en interaktiv demonstration uden verificeret motorgeometri, servicemanual eller reparationsdata. Undlad at bruge placeringerne til arbejde på et køretøj.</p>
         <div className="part-info"><span className="eyebrow">VALGT KOMPONENT</span><strong>{selected ? PARTS[selected].title : "Ingen markering"}</strong><p>{selected ? PARTS[selected].detail : "Tryk på en del af modellen for at vælge den."}</p></div>
         <div className="part-info"><span className="eyebrow">KILDEBASERET RESERVEDELSREGISTER · 2019</span>
@@ -229,10 +248,13 @@ export default function App() {
             <label style={{display:"block",marginTop:"10px"}}>Dit spørgsmål om billedet
               <input value={photoQuestion} onChange={e=>setPhotoQuestion(e.target.value)} placeholder="Er det bundproppen?" style={{width:"100%",padding:"12px",borderRadius:"8px",marginTop:"6px"}}/>
             </label>
-            <div className="controls"><button onClick={askAboutPhoto}>Spørg om billedet</button><button onClick={clearPhoto}>Fjern foto</button></div>
+            <div className="controls"><button onClick={analyzePhoto} disabled={visionBusy}>{visionBusy?"Analyserer…":"🔎 Prøv lokal billed-AI"}</button><button onClick={askAboutPhoto}>Spørg om billedet</button><button onClick={clearPhoto}>Fjern foto</button></div>
+            {visionResult&&<div><strong>Generelle billedkategorier (ikke reservedelsidentifikation):</strong>
+              {visionResult.map((item,i)=><p key={i}>{item.label} · {Math.round(item.score*100)} %</p>)}
+            </div>}
           </>}
           <p className="hint" aria-live="polite">{photoNotice}</p>
-          <p className="hint">Ingen billedanalyse eller cloud-upload i denne version. Fotoet gemmes ikke på serveren. Appen kan ikke identificere en bolt ud fra billedet endnu.</p>
+          <p className="hint">Valgfri lokal AI-test bruger MobileNetV4 (ImageNet-klasser), som ikke er trænet til Suzuki-komponenter. Modellen downloades fra Hugging Face ved første brug; selve billedanalysen udføres i browseren. Ingen foto-upload til vores server. Appen kan ikke identificere en bolt sikkert.</p>
         </div>
         <div className="part-info"><span className="eyebrow">DOKUMENTATIONSMOTOR · V2.6</span>
           <p>Kilder knyttet til den valgte komponent. Det er et kurateret kildeindeks, ikke AI-søgning i fulde servicemanualer.</p>
