@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { referencesFor } from "./references";
 import { planTask } from "./modules/task-engine/index.js";
 import ConceptPreview from "./modules/visualization/ConceptPreview.jsx";
-import FenceDesigner from "./modules/visualization/FenceDesigner.jsx";
+import UniversalDesigner from "./modules/visualization/UniversalDesigner.jsx";
 import { OrbitControls, Grid } from "@react-three/drei";
 
 const USER_VEHICLE = { manufacturer: "Suzuki", model: "GSX-S1000F", year: 2020, firstRegistration: "2023-04-05", market: "DK", modelCode: "GSX-S1000FAM0" };
@@ -248,7 +248,7 @@ export default function App() {
         <p>Foreløbig plan (ikke verificeret arbejdsvejledning):</p>
         <ol>{taskPlan.preview.map((step,i)=><li key={i}>{step}</li>)}</ol>
         <p><strong>Afklaring:</strong> {taskPlan.question}</p>
-        {taskPlan.domain === "construction" ? <FenceDesigner key={taskPlan.input} taskText={taskPlan.input} /> : <ConceptPreview plan={taskPlan} />}
+        <UniversalDesigner key={taskPlan.input} plan={taskPlan} />
         <p className="hint">Sikkerhed: {taskPlan.safety}. Dette er en regelbaseret prototype uden sprogmodel, automatisk CAD eller faglig godkendelse.</p>
       </div>}
     </section>
