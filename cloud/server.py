@@ -8,6 +8,7 @@ import time
 import os
 import urllib.request
 import urllib.error
+from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL = os.getenv("HF_CHAT_MODEL", "openai/gpt-oss-20b:cheapest")
@@ -58,6 +59,34 @@ def complete(messages):
         payload = json.load(result)
     return payload["choices"][0]["message"]["content"]
 
+
+# Read-only manufacturer catalogue discovery. No scraping of gated PDFs or inferred specifications.
+MANUAL_CATALOGUE = "https://www.suzuki.nl/motoren/service/gebruikershandleidingen-motoren/"
+class TextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+    def handle_data(self, data):
+        self.parts.append(data)
+def discover_manual(query):
+    import re
+    q = str(query or "").lower()
+    if not re.search(r"gsx[\\s-]*s[\\s-]*1000[\\s-]*f", q) or "2019" not in q:
+        return {"status":"model_unconfirmed","sources":[],"verified_procedure":False}
+    req = urllib.request.Request(MANUAL_CATALOGUE, headers={"User-Agent":"MechanicAI-PoC/0.1 (manufacturer catalogue lookup)"})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as response:
+            if response.status != 200 or "text/html" not in response.headers.get("Content-Type",""):
+                raise ValueError("Unexpected manufacturer response")
+            raw = response.read(600000).decode("utf-8", errors="replace")
+        parser = TextExtractor()
+        parser.feed(raw)
+        page = " ".join(" ".join(parser.parts).split())
+        found = bool(re.search(r"GSX-S1000\\s*\\(F\\)\\s*2019", page, re.I))
+        return {"status":"catalogue_match" if found else "not_found","sources":[{"title":"Suzuki Nederland – GSX-S1000(F) 2019", "url":MANUAL_CATALOGUE,"kind":"manufacturer_catalogue","content_verified":False}] if found else [],"verified_procedure":False}
+    except (OSError,ValueError,UnicodeError):
+        return {"status":"source_unavailable","sources":[],"verified_procedure":False}
+
 class Handler(BaseHTTPRequestHandler):
     def respond(self, status, data):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -79,6 +108,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-MechanicAI-Pilot-Key")
         self.end_headers()
     def do_GET(self):
+        if self.path.startswith("/manual-discovery?"):
+            from urllib.parse import urlsplit, parse_qs
+            params = parse_qs(urlsplit(self.path).query)
+            query = params.get("q", [""])[0][:180]
+            self.respond(200, discover_manual(query))
+            return
         self.respond(200 if self.path == "/health" else 404,
                      {"status": "ok", "configured": bool(os.getenv("HF_TOKEN")), "enabled": os.getenv("MECHANICAI_CLOUD_ENABLED") == "true"} if self.path == "/health" else {"error": "Not found"})
     def do_POST(self):
