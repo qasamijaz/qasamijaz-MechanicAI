@@ -64,6 +64,29 @@ export default function App() {
   const [selected,setSelected]=useState("drain");
   const [reset,setReset]=useState(0);
   const [question,setQuestion]=useState("");
+  const [photo,setPhoto]=useState(null);
+  const [photoQuestion,setPhotoQuestion]=useState("");
+  const [photoNotice,setPhotoNotice]=useState("Intet billede valgt.");
+  const photoUrlRef=useRef(null);
+  function choosePhoto(event) {
+    const file=event.target.files?.[0];
+    if(!file)return;
+    if(!file.type.startsWith("image/")){setPhotoNotice("Vælg en billedfil.");return;}
+    if(file.size>15*1024*1024){setPhotoNotice("Billedet må højst fylde 15 MB.");return;}
+    if(photoUrlRef.current)URL.revokeObjectURL(photoUrlRef.current);
+    const url=URL.createObjectURL(file);photoUrlRef.current=url;setPhoto(url);
+    setPhotoNotice("Billedet vises kun lokalt i browseren. Der er ikke tilsluttet billedgenkendelse.");
+    event.target.value="";
+  }
+  function clearPhoto() {
+    if(photoUrlRef.current)URL.revokeObjectURL(photoUrlRef.current);
+    photoUrlRef.current=null;setPhoto(null);setPhotoQuestion("");setPhotoNotice("Billedet er fjernet.");
+  }
+  function askAboutPhoto() {
+    if(!photo)return;
+    const answer="Jeg kan se, at du har tilføjet et billede, men denne version analyserer ikke billedets indhold. Jeg kan derfor ikke afgøre, hvilken bolt eller del der er vist. Brug et verificeret diagram eller få delen identificeret af en fagperson, før du løsner noget.";
+    setMessage(answer);setHistory(h=>[...h.slice(-7),{q:"[Foto] "+(photoQuestion.trim()||"Hvad viser billedet?"),a:answer}]);say(answer);
+  }
   const [history,setHistory]=useState([]);
   const [showSources,setShowSources]=useState(true);
   const selectedRef=useRef("drain");
@@ -123,6 +146,7 @@ export default function App() {
     stopHandsFree();
     setGuideStep(-1);setMessage("Guiden er stoppet.");
   }
+  useEffect(()=>()=>{if(photoUrlRef.current)URL.revokeObjectURL(photoUrlRef.current);},[]);
   useEffect(()=>()=>{handsFreeRef.current=false;if(restartRef.current)clearTimeout(restartRef.current);if("speechSynthesis" in window)window.speechSynthesis.cancel();if(recognition.current)recognition.current.abort();},[]);
   const recognition=useRef(null);
   function selectPart(id) {selectedRef.current=id;setSelected(id);setMessage(PARTS[id].detail);say(PARTS[id].title+". "+PARTS[id].detail);}
@@ -181,14 +205,14 @@ export default function App() {
   listenRef.current=listen;
   commandRef.current=command;
   return <main>
-    <header><div><h1>MechanicAI <small>V2.6 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
+    <header><div><h1>MechanicAI <small>V2.7 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
     <section className="workspace">
       <div className="viewer" aria-label="Interaktiv illustrativ 3D-motormodel">
         <Viewer selected={selected} onSelect={selectPart} reset={reset}/>
         <div className="viewer-tag">ILLUSTRATIV MODEL · IKKE SUZUKI</div>
       </div>
       <aside>
-        <h2>AI-mekaniker · V2.6</h2>
+        <h2>AI-mekaniker · V2.7</h2>
         <p className="notice">Dette er en interaktiv demonstration uden verificeret motorgeometri, servicemanual eller reparationsdata. Undlad at bruge placeringerne til arbejde på et køretøj.</p>
         <div className="part-info"><span className="eyebrow">VALGT KOMPONENT</span><strong>{selected ? PARTS[selected].title : "Ingen markering"}</strong><p>{selected ? PARTS[selected].detail : "Tryk på en del af modellen for at vælge den."}</p></div>
         <div className="part-info"><span className="eyebrow">KILDEBASERET RESERVEDELSREGISTER · 2019</span>
@@ -196,6 +220,20 @@ export default function App() {
           <p className="hint">Delnummeret kommer fra et reservedelskatalog, ikke fra den viste 3D-geometri. Bekræft stelnummer og markedsvariant før bestilling eller reparation.</p>
         </div>
         <div className="reply" aria-live="polite">{message}</div>
+        <div className="part-info"><span className="eyebrow">KAMERA · V2.7 TEST</span>
+          <p>Tag et foto af din motor eller vælg et eksisterende billede. Kamera og billedvisning kan testes uden upload.</p>
+          <label style={{display:"block",marginBottom:"10px"}}>📷 Tag foto eller vælg billede
+            <input type="file" accept="image/*" capture="environment" onChange={choosePhoto} style={{display:"block",width:"100%",marginTop:"6px"}}/>
+          </label>
+          {photo && <><img src={photo} alt="Dit valgte motorfoto" style={{width:"100%",maxHeight:"340px",objectFit:"contain",borderRadius:"10px",background:"#101820"}}/>
+            <label style={{display:"block",marginTop:"10px"}}>Dit spørgsmål om billedet
+              <input value={photoQuestion} onChange={e=>setPhotoQuestion(e.target.value)} placeholder="Er det bundproppen?" style={{width:"100%",padding:"12px",borderRadius:"8px",marginTop:"6px"}}/>
+            </label>
+            <div className="controls"><button onClick={askAboutPhoto}>Spørg om billedet</button><button onClick={clearPhoto}>Fjern foto</button></div>
+          </>}
+          <p className="hint" aria-live="polite">{photoNotice}</p>
+          <p className="hint">Ingen billedanalyse eller cloud-upload i denne version. Fotoet gemmes ikke på serveren. Appen kan ikke identificere en bolt ud fra billedet endnu.</p>
+        </div>
         <div className="part-info"><span className="eyebrow">DOKUMENTATIONSMOTOR · V2.6</span>
           <p>Kilder knyttet til den valgte komponent. Det er et kurateret kildeindeks, ikke AI-søgning i fulde servicemanualer.</p>
           <button onClick={()=>setShowSources(v=>!v)}>{showSources?"Skjul kilder":"Vis kilder"} ({selected?referencesFor(selected).length:0})</button>
