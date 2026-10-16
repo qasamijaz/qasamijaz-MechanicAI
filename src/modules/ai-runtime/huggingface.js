@@ -12,8 +12,10 @@ export function buildMessages(history, evidence=[]){
  const system="Du er MechanicAI, en hjælpsom dansk assistent til praktiske opgaver. Stil relevante opfølgende spørgsmål og giv trinvis, forståelig hjælp. Skeln mellem generel viden og verificeret dokumentation. Opfind aldrig manualer, reservedelsplaceringer, momentværdier, mål eller sikkerhedsgodkendelser. Hvis en handling kan være farlig eller kræve autorisation, forklar begrænsningen og bed om dokumentation eller faglig hjælp. Tilgængelige verificerede kilder: "+(sources.join("; ")||"ingen")+".";
  return [{role:"system",content:system},...history.slice(-10).map(x=>({role:x.role==="assistant"?"assistant":"user",content:String(x.text||"").slice(0,1000)}))];
 }
-export async function generateLocalReply(history,evidence=[]){
+export async function generateLocalReply(history,evidence=[],onStage=()=>{}){
+ onStage("loading");
  const generator=await loadLocalModel();
+ onStage("generating");
  const output=await generator(buildMessages(history,evidence),{max_new_tokens:180,do_sample:false,return_full_text:false});
  const result=output?.[0]?.generated_text;
  const text=typeof result==="string"?result:Array.isArray(result)?result.filter(x=>x.role==="assistant").at(-1)?.content:"";
