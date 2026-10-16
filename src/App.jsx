@@ -62,6 +62,9 @@ function Viewer({ selected, onSelect, reset }) {
 export default function App() {
   const [selected,setSelected]=useState("drain");
   const [reset,setReset]=useState(0);
+  const [question,setQuestion]=useState("");
+  const [history,setHistory]=useState([]);
+  const selectedRef=useRef("drain");
   const [message,setMessage]=useState("Vælg en del i 3D eller brug en af knapperne.");
   const [listening,setListening]=useState(false);
   const [handsFree,setHandsFree]=useState(false);
@@ -120,7 +123,26 @@ export default function App() {
   }
   useEffect(()=>()=>{handsFreeRef.current=false;if(restartRef.current)clearTimeout(restartRef.current);if("speechSynthesis" in window)window.speechSynthesis.cancel();if(recognition.current)recognition.current.abort();},[]);
   const recognition=useRef(null);
-  function selectPart(id) {setSelected(id);setMessage(PARTS[id].detail);say(PARTS[id].title+". "+PARTS[id].detail);}
+  function selectPart(id) {selectedRef.current=id;setSelected(id);setMessage(PARTS[id].detail);say(PARTS[id].title+". "+PARTS[id].detail);}
+  function respond(input) {
+    const s=input.toLocaleLowerCase("da-DK");
+    const id=/bundprop|olieprop|aftapningsprop/.test(s)?"drain":/oliefilter|filter/.test(s)?"filter":/bundkar/.test(s)?"sump":/topstykke/.test(s)?"head":selectedRef.current;
+    const part=PARTS[id];
+    let reply;
+    if(/hvilken bolt|peger ud|peger ned|venstre|højre|kan ikke finde|kan ikk finde|er det den|er det denne/.test(s)){
+      reply="Jeg kan ikke bekræfte den faktiske bolt ud fra vores demonstrationsmodel. Stop før du løsner noget. Du kan vise mig et foto i en senere version, eller sammenholde med en verificeret servicemanual.";
+    }else if(/nummer|reservedel|varenummer|delnummer/.test(s)){
+      reply=part.partNumber?"Reservedelsregisteret angiver "+part.partNumber+" for "+part.title+". Kontrollér variant og stelnummer i kilden.":"Vi har endnu ikke verificeret et reservedelsnummer for "+part.title+".";
+    }else if(/hvor|find|vis|sidder|fortæl|hvad er/.test(s)){
+      selectedRef.current=id;setSelected(id);
+      reply="Jeg markerer "+part.title+" i demonstrationsmodellen. "+part.detail;
+    }else if(/moment|newton|spænde|løsne|skrue af|olie mængde|olietype/.test(s)){
+      reply="Det kræver verificerede serviceoplysninger for præcis model og årgang. Jeg vil ikke gætte på moment, væske eller fremgangsmåde.";
+    }else{
+      reply="Jeg kan hjælpe med komponenternes navne, demonstrationsvisning og dokumenterede reservedelsnumre. Spørg for eksempel: Hvor sidder oliefilteret? Eller: Hvilket reservedelsnummer har bundproppen?";
+    }
+    setMessage(reply);setHistory(h=>[...h.slice(-7),{q:input,a:reply}]);say(reply);
+  }
   function command(input) {
     const s=input.toLocaleLowerCase("da-DK");
     if (/stop|afbryd|hold op/.test(s)) stopGuide();
@@ -133,7 +155,7 @@ export default function App() {
     else if (/topstykke|toppen/.test(s)) selectPart("head");
     else if (/nulstil|reset|start forfra/.test(s)) {setReset(x=>x+1);setSelected(null);setMessage("Visningen er nulstillet.");}
     else if (/skjul|fjern/.test(s)) {setSelected(null);setMessage("Markeringen er fjernet.");}
-    else setMessage("Kommando ikke genkendt. Prøv eksempelvis: vis oliefilter.");
+    else respond(input);
   }
   function listen() {
     const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -157,14 +179,14 @@ export default function App() {
   listenRef.current=listen;
   commandRef.current=command;
   return <main>
-    <header><div><h1>MechanicAI <small>V2.4 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
+    <header><div><h1>MechanicAI <small>V2.5 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
     <section className="workspace">
       <div className="viewer" aria-label="Interaktiv illustrativ 3D-motormodel">
         <Viewer selected={selected} onSelect={selectPart} reset={reset}/>
         <div className="viewer-tag">ILLUSTRATIV MODEL · IKKE SUZUKI</div>
       </div>
       <aside>
-        <h2>AI-mekaniker · V2.4</h2>
+        <h2>AI-mekaniker · V2.5</h2>
         <p className="notice">Dette er en interaktiv demonstration uden verificeret motorgeometri, servicemanual eller reparationsdata. Undlad at bruge placeringerne til arbejde på et køretøj.</p>
         <div className="part-info"><span className="eyebrow">VALGT KOMPONENT</span><strong>{selected ? PARTS[selected].title : "Ingen markering"}</strong><p>{selected ? PARTS[selected].detail : "Tryk på en del af modellen for at vælge den."}</p></div>
         <div className="part-info"><span className="eyebrow">KILDEBASERET RESERVEDELSREGISTER · 2019</span>
@@ -172,6 +194,14 @@ export default function App() {
           <p className="hint">Delnummeret kommer fra et reservedelskatalog, ikke fra den viste 3D-geometri. Bekræft stelnummer og markedsvariant før bestilling eller reparation.</p>
         </div>
         <div className="reply" aria-live="polite">{message}</div>
+        <div className="part-info"><span className="eyebrow">SAMTALEPROTOTYPE · INGEN CLOUD-AI</span>
+          <p>Stil spørgsmål på dansk. Denne version bruger kontrollerede svar og komponentdata – ikke en sprogmodel.</p>
+          <form onSubmit={e=>{e.preventDefault();if(question.trim()){respond(question.trim());setQuestion("");}}}>
+            <input aria-label="Spørg mekanikeren" placeholder="Fx: Hvilken bolt mener du?" value={question} onChange={e=>setQuestion(e.target.value)} style={{width:"100%",padding:"12px",borderRadius:"8px",marginBottom:"8px"}}/>
+            <button type="submit">Spørg mekanikeren</button>
+          </form>
+          {history.slice(-3).map((entry,i)=><p key={i}><strong>Du:</strong> {entry.q}<br/><strong>MechanicAI:</strong> {entry.a}</p>)}
+        </div>
         <div className="part-info"><span className="eyebrow">DOKUMENTATION · 2019 GSX-S1000F</span><p>Vi har fundet Suzukis officielle manualoversigt og en reservedelskatalog-reference til bundkar og olieaftapningsprop. Det dokumenterer delnumre, men ikke den præcise placering på vores 3D-demomodel.</p><a href="https://www.suzuki.nl/motoren/service/gebruikershandleidingen-motoren/" target="_blank" rel="noopener noreferrer">Suzuki: ejerhåndbøger</a><p><a href="https://www.pieces-suzuki.ca/suzuki-moto/1000-MOTO/GSX-S/2019/GSX-S1000FYA-L9-E21-/MOTEUR-TRANSMISSION/CARTER-INFERIEUR--POMPE-A-HUILE/2021000000/2021018533/M/10531" target="_blank" rel="noopener noreferrer">2019: reservedelskatalog for bundkar</a></p><p>Ingen bolte eller tilspændingsmomenter er verificeret i 3D endnu.</p></div>
         <div className="part-info" aria-live="polite"><span className="eyebrow">STEMMESTYRET DEMOGUIDE</span><p>{guideStep>=0?"Trin "+(guideStep+1)+" af "+steps.length+": "+steps[guideStep].text:"Start et firetrins demonstrationsforløb med dansk oplæsning og 3D-fokus."}</p>
           <p><strong>Håndfri: {handsFree?"Aktiv":"Fra"}</strong> · {voiceStatus}</p><div className="controls"><button className="primary" onClick={handsFree?stopHandsFree:startHandsFree}>{handsFree?"⏹ Afslut håndfri":"🎤 Start håndfri"}</button><button onClick={()=>goStep(0)}>▶ Start guide</button><button onClick={()=>goStep(Math.min(guideStep+1,steps.length-1))}>Næste</button><button onClick={()=>guideStep>=0?say(steps[guideStep].text):say(message)}>Gentag</button><button onClick={stopGuide}>Stop</button><button onClick={()=>{if(voiceEnabled&&"speechSynthesis" in window)window.speechSynthesis.cancel();setVoiceEnabled(v=>!v);}}>{voiceEnabled?"🔊 Tale til":"🔇 Tale fra"}</button></div>
