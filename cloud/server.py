@@ -114,8 +114,8 @@ class Handler(BaseHTTPRequestHandler):
             query = params.get("q", [""])[0][:180]
             self.respond(200, discover_manual(query))
             return
-        self.respond(200 if self.path == "/health" else 404,
-                     {"status": "ok", "configured": bool(os.getenv("HF_TOKEN")), "enabled": os.getenv("MECHANICAI_CLOUD_ENABLED") == "true"} if self.path == "/health" else {"error": "Not found"})
+        self.respond(200 if self.path.split("?", 1)[0] == "/health" else 404,
+                     {"status": "ok", "configured": bool(os.getenv("HF_TOKEN")), "enabled": os.getenv("MECHANICAI_CLOUD_ENABLED") == "true"} if self.path.split("?", 1)[0] == "/health" else {"error": "Not found"})
     def do_POST(self):
         if self.path != "/chat":
             self.respond(404, {"error": "Not found"})
