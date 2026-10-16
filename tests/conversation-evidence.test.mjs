@@ -1,0 +1,10 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {startConversation,replyConversation} from "../src/modules/conversation/index.js";
+import {summarizeEvidence} from "../src/modules/evidence/index.js";
+test("conversation starts with domain clarification",()=>{const s=startConversation("Skift olie på motorcykel");assert.equal(s.plan.domain,"vehicle");assert.equal(s.turns.length,2);});
+test("reply preserves user answer",()=>{const s=replyConversation(startConversation("Tegn et hus"),"160 m2");assert.equal(s.answers[0],"160 m2");});
+test("second answer moves to review without verified instructions",()=>{let s=startConversation("Design et hegn");s=replyConversation(s,"12 meter");s=replyConversation(s,"træ");assert.equal(s.stage,"review");assert.equal(s.plan.verifiedInstructions,false);});
+test("empty answer does not mutate conversation",()=>{const s=startConversation("Design et hegn");assert.equal(replyConversation(s,"  "),s);});
+test("no evidence is not represented as verified",()=>assert.equal(summarizeEvidence([]).verified.length,0));
+test("candidate evidence remains unverified",()=>{const e=summarizeEvidence([{value:"Oil drain",source_filename:"manual.pdf",page_verified:false,fitment_verified:false,procedure_verified:false}]);assert.equal(e.candidates.length,1);assert.equal(e.verified.length,0);});
