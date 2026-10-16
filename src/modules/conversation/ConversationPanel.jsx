@@ -2,6 +2,7 @@ import React,{useState,useRef,useEffect} from "react";
 import {startConversation,replyConversation} from "./index.js";
 import {summarizeEvidence} from "../evidence/index.js";
 import {generateLocalReply,supported,MODEL_ID} from "../ai-runtime/huggingface.js";
+import {readDiagnostic,recordDiagnostic,interpretDiagnostic,clearDiagnostic} from "../ai-runtime/diagnostics.js";
 export default function ConversationPanel({plan}){
  const [conversation,setConversation]=useState(()=>startConversation(plan.input));
  const [answer,setAnswer]=useState("");
@@ -9,9 +10,12 @@ export default function ConversationPanel({plan}){
  const [mode,setMode]=useState("offline");
  const [busy,setBusy]=useState(false);
  const [modelStatus,setModelStatus]=useState("");
+ const [diagnostic,setDiagnostic]=useState(null);
  const recognition=useRef(null);
  useEffect(()=>{setConversation(startConversation(plan.input));setAnswer("");},[plan.input]);
  useEffect(()=>()=>recognition.current?.abort(),[]);
+ useEffect(()=>{try{setDiagnostic(readDiagnostic(window.localStorage));}catch{}},[]);
+ function track(phase,error=""){const value=recordDiagnostic(window.localStorage,phase,{model:MODEL_ID,error});setDiagnostic(value);}
  const evidence=summarizeEvidence([]);
  async function submit(text){
   if(!text.trim()||busy)return;
@@ -21,11 +25,14 @@ export default function ConversationPanel({plan}){
   const history=[...conversation.turns,{role:"user",text}];
   setConversation(c=>({...c,turns:history}));
   setBusy(true);setModelStatus("Indlæser eller bruger Hugging Face-modellen lokalt…");
+  track("loading");
   try{
-   const reply=await generateLocalReply(history,evidence.verified);
+   const reply=await generateLocalReply(history,evidence.verified,stage=>{track(stage);setModelStatus(stage==="loading"?"Indlæser Hugging Face-modellen lokalt…":"Genererer AI-svar lokalt…");});
+   track("complete");
    setConversation(c=>({...c,turns:[...c.turns,{role:"assistant",text:reply}]}));
    setModelStatus("Lokalt AI-svar. Tekniske oplysninger er ikke verificeret.");
   }catch(error){
+   track("error",String(error?.message||"Ukendt fejl"));
    setConversation(c=>({...c,turns:[...c.turns,{role:"assistant",text:"Den lokale AI kunne ikke køre. Du kan vælge offline-prototypen i stedet."}]}));
    setModelStatus(String(error?.message||"Ukendt fejl"));
   }finally{setBusy(false);}
@@ -42,6 +49,7 @@ export default function ConversationPanel({plan}){
  function readLast(){if(!("speechSynthesis" in window))return;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(conversation.turns.at(-1)?.text||"");u.lang="da-DK";window.speechSynthesis.speak(u);}
  return <section aria-label="Samtale om opgaven" style={{border:"1px solid #64748b",padding:12,borderRadius:12,marginTop:12}}>
   <h3>Opgavesamtale</h3>
+  {diagnostic&&<div role="status" style={{padding:10,border:"1px solid #64748b",borderRadius:8,marginBottom:10}}><strong>AI-diagnosticering</strong><p>{interpretDiagnostic(diagnostic).message}</p><p style={{fontSize:12}}>Fase: {diagnostic.phase} · {new Date(diagnostic.at).toLocaleString("da-DK")}</p><button type="button" onClick={()=>{clearDiagnostic(window.localStorage);setDiagnostic(null);}}>Ryd diagnosticering</button></div>}
   <label>Tilstand <select aria-label="Samtaletilstand" value={mode} onChange={e=>setMode(e.target.value)}><option value="offline">Regelbaseret fallback</option><option value="ai" disabled={!supported()}>Hugging Face AI (lokal, kræver WebGPU)</option></select></label>
   {mode==="ai"&&<p style={{fontSize:12}}>Model: {MODEL_ID}. Kræver WebGPU, modeldownload og ledig hukommelse. {supported()?"WebGPU registreret.":"WebGPU ikke registreret."}</p>}
   <div aria-live="polite" style={{maxHeight:260,overflowY:"auto",display:"grid",gap:8}}>
