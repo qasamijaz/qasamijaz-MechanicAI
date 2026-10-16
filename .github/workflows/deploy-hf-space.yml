@@ -1,0 +1,46 @@
+name: Deploy web to Hugging Face Space
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: mechanicai-hf-space
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build static web app
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+          test -f dist/index.html
+      - name: Install Hugging Face client
+        run: python -m pip install 'huggingface_hub>=0.26,<2'
+      - name: Deploy built files only
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::error::Missing HF_TOKEN repository secret"
+            exit 1
+          fi
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          api.upload_folder(
+              folder_path="dist",
+              repo_id="QasamMekAI/MechanicAI",
+              repo_type="space",
+              commit_message="Deploy MechanicAI web from GitHub Actions",
+          )
+          print("Published static dist/ to Hugging Face Space.")
+          PY
