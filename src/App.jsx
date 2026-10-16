@@ -1,5 +1,7 @@
 import React, { useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
+import { useEffect } from "react";
+import * as THREE from "three";
 import { OrbitControls, Grid } from "@react-three/drei";
 
 const PARTS = {
@@ -33,6 +35,19 @@ function Engine({ selected, onSelect }) {
     {[-1.04,1.04].map(x => <mesh key={x} position={[x,0.18,0.77]} rotation={[Math.PI/2,0,0]}><cylinderGeometry args={[0.4,0.4,0.11,32]}/><meshStandardMaterial color="#45566a" metalness={0.7}/></mesh>)}
   </group>;
 }
+const FOCUS = { drain: [0.62,-0.88,0.28], sump: [0,-0.62,0], filter: [-1.32,-0.15,0.35], head: [0,1.08,0] };
+function CameraFocus({ selected }) {
+  const { controls, camera } = useThree();
+  useEffect(() => {
+    if (!controls || !selected || !FOCUS[selected]) return;
+    const target = new THREE.Vector3(...FOCUS[selected]);
+    const offset = new THREE.Vector3(3.9,2.7,4.5).normalize().multiplyScalar(4.7);
+    controls.target.copy(target);
+    camera.position.copy(target.clone().add(offset));
+    controls.update();
+  }, [selected, controls, camera]);
+  return null;
+}
 function Viewer({ selected, onSelect, reset }) {
   return <Canvas key={reset} camera={{position:[3.9,2.7,4.5],fov:45}} gl={{antialias:true}}>
     <color attach="background" args={["#111b29"]}/>
@@ -40,6 +55,7 @@ function Viewer({ selected, onSelect, reset }) {
     <Engine selected={selected} onSelect={onSelect}/>
     <Grid position={[0,-1.4,0]} infiniteGrid fadeDistance={16} sectionColor="#30465c" cellColor="#1f3144"/>
     <OrbitControls makeDefault enableDamping minDistance={2.8} maxDistance={10} target={[0,0.1,0]}/>
+    <CameraFocus selected={selected}/>
   </Canvas>;
 }
 export default function App() {
@@ -77,10 +93,11 @@ export default function App() {
         <div className="viewer-tag">ILLUSTRATIV MODEL · IKKE SUZUKI</div>
       </div>
       <aside>
-        <h2>AI-mekaniker · V2</h2>
+        <h2>AI-mekaniker · V2.1</h2>
         <p className="notice">Dette er en interaktiv demonstration uden verificeret motorgeometri, servicemanual eller reparationsdata. Undlad at bruge placeringerne til arbejde på et køretøj.</p>
         <div className="part-info"><span className="eyebrow">VALGT KOMPONENT</span><strong>{selected ? PARTS[selected].title : "Ingen markering"}</strong><p>{selected ? PARTS[selected].detail : "Tryk på en del af modellen for at vælge den."}</p></div>
         <div className="reply" aria-live="polite">{message}</div>
+        <div className="part-info"><span className="eyebrow">DOKUMENTATION · 2019 GSX-S1000F</span><p>Vi har fundet Suzukis officielle manualoversigt og en reservedelskatalog-reference til bundkar og olieaftapningsprop. Det dokumenterer delnumre, men ikke den præcise placering på vores 3D-demomodel.</p><a href="https://www.suzuki.nl/motoren/service/gebruikershandleidingen-motoren/" target="_blank" rel="noopener noreferrer">Suzuki: ejerhåndbøger</a><p><a href="https://www.pieces-suzuki.ca/suzuki-moto/1000-MOTO/GSX-S/2019/GSX-S1000FYA-L9-E21-/MOTEUR-TRANSMISSION/CARTER-INFERIEUR--POMPE-A-HUILE/2021000000/2021018533/M/10531" target="_blank" rel="noopener noreferrer">2019: reservedelskatalog for bundkar</a></p><p>Ingen bolte eller tilspændingsmomenter er verificeret i 3D endnu.</p></div>
         <div className="controls">
           <button className="primary" onClick={listen} disabled={listening}>{listening ? "🎙 Lytter…" : "🎙 Tal til modellen"}</button>
           <button onClick={()=>selectPart("drain")}>Vis bundproppen</button>
