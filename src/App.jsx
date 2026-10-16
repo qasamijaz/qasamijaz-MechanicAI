@@ -5,11 +5,12 @@ import * as THREE from "three";
 import { OrbitControls, Grid } from "@react-three/drei";
 
 const PARTS = {
-  sump: { title: "Bundkar", detail: "Illustrativ beholder nederst på motoren. Form og placering er ikke verificeret mod Suzuki." },
-  drain: { title: "Bundprop (demo)", detail: "Den orange sekskant er kun et demonstrationspunkt. Brug den ikke til at identificere en bolt på din motorcykel." },
-  filter: { title: "Oliefilter (demo)", detail: "Viser, hvordan en komponent kan udpeges i 3D. Placering og udformning er ikke verificeret." },
-  head: { title: "Topstykke (demo)", detail: "Forenklet øvre motordel til navigation i modellen; ikke en teknisk gengivelse." }
+  sump: { title: "Bundkar", detail: "Illustrativ beholder nederst på motoren. Form og placering er ikke verificeret mod Suzuki.", partNumber: "11511-21H01", reference: "1", evidence: "Reservedelskatalog 2019 GSX-S1000F: PAN, OIL." },
+  drain: { title: "Bundprop (demo)", detail: "Den orange sekskant er kun et demonstrationspunkt. Brug den ikke til at identificere en bolt på din motorcykel.", partNumber: "09247-14036", reference: "5-1", evidence: "Reservedelskatalog 2019 GSX-S1000F: PLUG, OIL DRAIN. Alternativt nummer 11972-17E70 er også opført; kontrollér variant." },
+  filter: { title: "Oliefilter (demo)", detail: "Viser, hvordan en komponent kan udpeges i 3D. Placering og udformning er ikke verificeret.", partNumber: null, reference: null, evidence: "Endnu ikke verificeret i komponentbiblioteket." },
+  head: { title: "Topstykke (demo)", detail: "Forenklet øvre motordel til navigation i modellen; ikke en teknisk gengivelse.", partNumber: null, reference: null, evidence: "Endnu ikke verificeret i komponentbiblioteket." }
 };
+const PARTS_SOURCE = "https://www.revzilla.com/oem/suzuki/2019-suzuki-gsx-s1000f/oil-panoil-pump?submodel=gsx-s1000fzal9";
 function Part({ id, selected, onSelect, children }) {
   return <group onClick={e => { e.stopPropagation(); onSelect(id); }}>{children}</group>;
 }
@@ -86,16 +87,20 @@ export default function App() {
     } catch {setListening(false);setMessage("Mikrofonen kunne ikke startes.");}
   }
   return <main>
-    <header><div><h1>MechanicAI <small>V2 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
+    <header><div><h1>MechanicAI <small>V2.2 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
     <section className="workspace">
       <div className="viewer" aria-label="Interaktiv illustrativ 3D-motormodel">
         <Viewer selected={selected} onSelect={selectPart} reset={reset}/>
         <div className="viewer-tag">ILLUSTRATIV MODEL · IKKE SUZUKI</div>
       </div>
       <aside>
-        <h2>AI-mekaniker · V2.1</h2>
+        <h2>AI-mekaniker · V2.2</h2>
         <p className="notice">Dette er en interaktiv demonstration uden verificeret motorgeometri, servicemanual eller reparationsdata. Undlad at bruge placeringerne til arbejde på et køretøj.</p>
         <div className="part-info"><span className="eyebrow">VALGT KOMPONENT</span><strong>{selected ? PARTS[selected].title : "Ingen markering"}</strong><p>{selected ? PARTS[selected].detail : "Tryk på en del af modellen for at vælge den."}</p></div>
+        <div className="part-info"><span className="eyebrow">KILDEBASERET RESERVEDELSREGISTER · 2019</span>
+          {selected && PARTS[selected].partNumber ? <><p><strong>Delnummer: {PARTS[selected].partNumber}</strong> · Diagramposition {PARTS[selected].reference}</p><p>{PARTS[selected].evidence}</p><a href={PARTS_SOURCE} target="_blank" rel="noopener noreferrer">Se reservedelsdiagram og variant</a></> : <p>{selected ? PARTS[selected].evidence : "Vælg en komponent for at se eventuelle verificerede reservedelsoplysninger."}</p>}
+          <p className="hint">Delnummeret kommer fra et reservedelskatalog, ikke fra den viste 3D-geometri. Bekræft stelnummer og markedsvariant før bestilling eller reparation.</p>
+        </div>
         <div className="reply" aria-live="polite">{message}</div>
         <div className="part-info"><span className="eyebrow">DOKUMENTATION · 2019 GSX-S1000F</span><p>Vi har fundet Suzukis officielle manualoversigt og en reservedelskatalog-reference til bundkar og olieaftapningsprop. Det dokumenterer delnumre, men ikke den præcise placering på vores 3D-demomodel.</p><a href="https://www.suzuki.nl/motoren/service/gebruikershandleidingen-motoren/" target="_blank" rel="noopener noreferrer">Suzuki: ejerhåndbøger</a><p><a href="https://www.pieces-suzuki.ca/suzuki-moto/1000-MOTO/GSX-S/2019/GSX-S1000FYA-L9-E21-/MOTEUR-TRANSMISSION/CARTER-INFERIEUR--POMPE-A-HUILE/2021000000/2021018533/M/10531" target="_blank" rel="noopener noreferrer">2019: reservedelskatalog for bundkar</a></p><p>Ingen bolte eller tilspændingsmomenter er verificeret i 3D endnu.</p></div>
         <div className="controls">
