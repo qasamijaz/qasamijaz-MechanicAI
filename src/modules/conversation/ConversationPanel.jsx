@@ -9,6 +9,7 @@ export default function ConversationPanel({plan}){
  const [answer,setAnswer]=useState("");
  const [listening,setListening]=useState(false);
  const [mode,setMode]=useState("offline");
+ const [pilotKey,setPilotKey]=useState("");
  const [busy,setBusy]=useState(false);
  const [modelStatus,setModelStatus]=useState("");
  const [diagnostic,setDiagnostic]=useState(null);
@@ -26,10 +27,10 @@ export default function ConversationPanel({plan}){
   if(mode==="ai"&&!supported()){setModelStatus("WebGPU er ikke tilgængelig. Brug cloud eller fallback.");return;}
   const history=[...conversation.turns,{role:"user",text}];
   setConversation(c=>({...c,turns:history}));
-  setBusy(true);setModelStatus("Indlæser eller bruger Hugging Face-modellen lokalt…");
+  setBusy(true);setModelStatus(mode==="cloud"?"Kontakter cloud-AI…":"Indlæser eller bruger Hugging Face-modellen lokalt…");
   track(mode==="cloud"?"cloud-request":"loading");
   try{
-   const reply=mode==="cloud"?await generateCloudReply(history):await generateLocalReply(history,evidence.verified,stage=>{track(stage);setModelStatus(stage==="loading"?"Indlæser Hugging Face-modellen lokalt…":"Genererer AI-svar lokalt…");});
+   const reply=mode==="cloud"?await generateCloudReply(history,{pilotKey}):await generateLocalReply(history,evidence.verified,stage=>{track(stage);setModelStatus(stage==="loading"?"Indlæser Hugging Face-modellen lokalt…":"Genererer AI-svar lokalt…");});
    track("complete");
    setConversation(c=>({...c,turns:[...c.turns,{role:"assistant",text:reply}]}));
    setModelStatus(mode==="cloud"?"Cloud-AI-svar. Tekniske oplysninger er ikke verificeret.":"Lokalt AI-svar. Tekniske oplysninger er ikke verificeret.");
@@ -53,6 +54,7 @@ export default function ConversationPanel({plan}){
   <h3>Opgavesamtale</h3>
   {diagnostic&&<div role="status" style={{padding:10,border:"1px solid #64748b",borderRadius:8,marginBottom:10}}><strong>AI-diagnosticering</strong><p>{interpretDiagnostic(diagnostic).message}</p><p style={{fontSize:12}}>Fase: {diagnostic.phase} · {new Date(diagnostic.at).toLocaleString("da-DK")}</p><button type="button" onClick={()=>{clearDiagnostic(window.localStorage);setDiagnostic(null);}}>Ryd diagnosticering</button></div>}
   <label>Tilstand <select aria-label="Samtaletilstand" value={mode} onChange={e=>setMode(e.target.value)}><option value="offline">Regelbaseret fallback</option><option value="cloud" disabled={!cloudConfigured()}>Hugging Face AI i skyen</option><option value="ai" disabled={!supported()}>Hugging Face AI (lokal, kræver WebGPU)</option></select></label>
+  {mode==="cloud"&&<label style={{display:"block",marginTop:8}}>PoC-adgangskode <input type="password" autoComplete="off" aria-label="PoC-adgangskode" value={pilotKey} onChange={e=>setPilotKey(e.target.value)} placeholder="Kun til test" /></label>}
   {mode==="cloud"&&<p style={{fontSize:12}}>Modellen kører i skyen, ikke på telefonen. Samtaletekst sendes til AI-serveren og Hugging Face Inference Provider. Ingen verificerede manualer er tilsluttet.</p>}
   {mode==="ai"&&<p style={{fontSize:12}}>Model: {MODEL_ID}. Kræver WebGPU, modeldownload og ledig hukommelse. {supported()?"WebGPU registreret.":"WebGPU ikke registreret."}</p>}
   <div aria-live="polite" style={{maxHeight:260,overflowY:"auto",display:"grid",gap:8}}>
