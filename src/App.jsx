@@ -64,6 +64,13 @@ export default function App() {
   const [reset,setReset]=useState(0);
   const [message,setMessage]=useState("Vælg en del i 3D eller brug en af knapperne.");
   const [listening,setListening]=useState(false);
+  const [handsFree,setHandsFree]=useState(false);
+  const handsFreeRef=useRef(false);
+  const speakingRef=useRef(false);
+  const restartRef=useRef(null);
+  const listenRef=useRef(null);
+  const commandRef=useRef(null);
+  const [voiceStatus,setVoiceStatus]=useState("Fra");
   const [guideStep,setGuideStep]=useState(-1);
   const [voiceEnabled,setVoiceEnabled]=useState(true);
   const steps=[
@@ -72,10 +79,19 @@ export default function App() {
     {part:"filter",text:"Trin 3. Find oliefilteret i demonstrationsmodellen. Dets placering er endnu ikke verificeret mod din motorcykel."},
     {part:null,text:"Trin 4. Demonstrationen er slut. Før en rigtig reparation skal vi verificere modelvariant, manual, komponentplacering og sikkerhedsforhold."}
   ];
+  function resumeListening() {
+    if(!handsFreeRef.current || speakingRef.current)return;
+    if(restartRef.current)clearTimeout(restartRef.current);
+    restartRef.current=setTimeout(()=>{if(handsFreeRef.current&&!speakingRef.current)listenRef.current?.();},350);
+  }
   function say(text) {
-    if(!voiceEnabled || !("speechSynthesis" in window))return;
+    if(!voiceEnabled || !("speechSynthesis" in window)){resumeListening();return;}
+    recognition.current?.abort();
+    speakingRef.current=true;setVoiceStatus("Taler");
     window.speechSynthesis.cancel();
     const u=new SpeechSynthesisUtterance(text);u.lang="da-DK";u.rate=0.92;
+    u.onend=()=>{speakingRef.current=false;resumeListening();};
+    u.onerror=()=>{speakingRef.current=false;resumeListening();};
     window.speechSynthesis.speak(u);
   }
   function goStep(index) {
@@ -83,12 +99,26 @@ export default function App() {
     const step=steps[index];setGuideStep(index);
     setSelected(step.part);setMessage(step.text);say(step.text);
   }
+  function stopHandsFree() {
+    handsFreeRef.current=false;setHandsFree(false);setVoiceStatus("Fra");
+    if(restartRef.current)clearTimeout(restartRef.current);
+    recognition.current?.abort();
+    if("speechSynthesis" in window)window.speechSynthesis.cancel();
+    speakingRef.current=false;setListening(false);
+  }
+  function startHandsFree() {
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){setMessage("Håndfri stemmegenkendelse understøttes ikke i denne browser. Brug knapperne eller en anden browser.");return;}
+    handsFreeRef.current=true;setHandsFree(true);setVoiceStatus("Starter");
+    say("Håndfri tilstand er startet. Sig start guide, næste, gentag eller stop.");
+    if(!voiceEnabled)resumeListening();
+  }
   function stopGuide() {
     if("speechSynthesis" in window)window.speechSynthesis.cancel();
-    if(recognition.current)recognition.current.abort();
-    setListening(false);setGuideStep(-1);setMessage("Guiden er stoppet.");
+    stopHandsFree();
+    setGuideStep(-1);setMessage("Guiden er stoppet.");
   }
-  useEffect(()=>()=>{if("speechSynthesis" in window)window.speechSynthesis.cancel();if(recognition.current)recognition.current.abort();},[]);
+  useEffect(()=>()=>{handsFreeRef.current=false;if(restartRef.current)clearTimeout(restartRef.current);if("speechSynthesis" in window)window.speechSynthesis.cancel();if(recognition.current)recognition.current.abort();},[]);
   const recognition=useRef(null);
   function selectPart(id) {setSelected(id);setMessage(PARTS[id].detail);say(PARTS[id].title+". "+PARTS[id].detail);}
   function command(input) {
@@ -107,23 +137,34 @@ export default function App() {
   }
   function listen() {
     const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SpeechRecognition) {setMessage("Stemmegenkendelse understøttes ikke i denne browser. Brug knapperne.");return;}
+    if(!SpeechRecognition){setMessage("Stemmegenkendelse understøttes ikke i denne browser. Brug knapperne.");stopHandsFree();return;}
+    if(speakingRef.current)return;
     try {
-      const r=new SpeechRecognition();r.lang="da-DK";r.interimResults=false;
-      r.onresult=e=>command(e.results[0][0].transcript);
-      r.onerror=e=>{setListening(false);setMessage("Mikrofonfejl: "+e.error);};
-      r.onend=()=>setListening(false);recognition.current=r;r.start();setListening(true);
-    } catch {setListening(false);setMessage("Mikrofonen kunne ikke startes.");}
+      recognition.current?.abort();
+      const r=new SpeechRecognition();r.lang="da-DK";r.interimResults=false;r.continuous=false;
+      recognition.current=r;
+      r.onstart=()=>{setListening(true);setVoiceStatus("Lytter");};
+      r.onresult=e=>{const heard=e.results[0][0].transcript;setVoiceStatus("Forstod: "+heard);commandRef.current?.(heard);};
+      r.onerror=e=>{
+        setListening(false);
+        if(e.error==="not-allowed"||e.error==="service-not-allowed"){stopHandsFree();setMessage("Mikrofonadgang blev afvist. Tillad mikrofonen i browseren.");}
+        else if(e.error!=="aborted"&&e.error!=="no-speech"){setVoiceStatus("Mikrofon: "+e.error);}
+      };
+      r.onend=()=>{setListening(false);if(recognition.current===r)recognition.current=null;resumeListening();};
+      r.start();
+    } catch {setListening(false);setVoiceStatus("Kunne ikke starte mikrofon");if(handsFreeRef.current)resumeListening();}
   }
+  listenRef.current=listen;
+  commandRef.current=command;
   return <main>
-    <header><div><h1>MechanicAI <small>V2.3 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
+    <header><div><h1>MechanicAI <small>V2.4 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
     <section className="workspace">
       <div className="viewer" aria-label="Interaktiv illustrativ 3D-motormodel">
         <Viewer selected={selected} onSelect={selectPart} reset={reset}/>
         <div className="viewer-tag">ILLUSTRATIV MODEL · IKKE SUZUKI</div>
       </div>
       <aside>
-        <h2>AI-mekaniker · V2.3</h2>
+        <h2>AI-mekaniker · V2.4</h2>
         <p className="notice">Dette er en interaktiv demonstration uden verificeret motorgeometri, servicemanual eller reparationsdata. Undlad at bruge placeringerne til arbejde på et køretøj.</p>
         <div className="part-info"><span className="eyebrow">VALGT KOMPONENT</span><strong>{selected ? PARTS[selected].title : "Ingen markering"}</strong><p>{selected ? PARTS[selected].detail : "Tryk på en del af modellen for at vælge den."}</p></div>
         <div className="part-info"><span className="eyebrow">KILDEBASERET RESERVEDELSREGISTER · 2019</span>
@@ -133,8 +174,8 @@ export default function App() {
         <div className="reply" aria-live="polite">{message}</div>
         <div className="part-info"><span className="eyebrow">DOKUMENTATION · 2019 GSX-S1000F</span><p>Vi har fundet Suzukis officielle manualoversigt og en reservedelskatalog-reference til bundkar og olieaftapningsprop. Det dokumenterer delnumre, men ikke den præcise placering på vores 3D-demomodel.</p><a href="https://www.suzuki.nl/motoren/service/gebruikershandleidingen-motoren/" target="_blank" rel="noopener noreferrer">Suzuki: ejerhåndbøger</a><p><a href="https://www.pieces-suzuki.ca/suzuki-moto/1000-MOTO/GSX-S/2019/GSX-S1000FYA-L9-E21-/MOTEUR-TRANSMISSION/CARTER-INFERIEUR--POMPE-A-HUILE/2021000000/2021018533/M/10531" target="_blank" rel="noopener noreferrer">2019: reservedelskatalog for bundkar</a></p><p>Ingen bolte eller tilspændingsmomenter er verificeret i 3D endnu.</p></div>
         <div className="part-info" aria-live="polite"><span className="eyebrow">STEMMESTYRET DEMOGUIDE</span><p>{guideStep>=0?"Trin "+(guideStep+1)+" af "+steps.length+": "+steps[guideStep].text:"Start et firetrins demonstrationsforløb med dansk oplæsning og 3D-fokus."}</p>
-          <div className="controls"><button className="primary" onClick={()=>goStep(0)}>▶ Start guide</button><button onClick={()=>goStep(Math.min(guideStep+1,steps.length-1))}>Næste</button><button onClick={()=>guideStep>=0?say(steps[guideStep].text):say(message)}>Gentag</button><button onClick={stopGuide}>Stop</button><button onClick={()=>{if(voiceEnabled&&"speechSynthesis" in window)window.speechSynthesis.cancel();setVoiceEnabled(v=>!v);}}>{voiceEnabled?"🔊 Tale til":"🔇 Tale fra"}</button></div>
-          <p className="hint">Prøv også mikrofonkommandoerne: “start guide”, “næste”, “gentag” og “stop”. Talegenkendelse og oplæsning afhænger af browseren. Ingen AI-genererede reparationsinstruktioner.</p>
+          <p><strong>Håndfri: {handsFree?"Aktiv":"Fra"}</strong> · {voiceStatus}</p><div className="controls"><button className="primary" onClick={handsFree?stopHandsFree:startHandsFree}>{handsFree?"⏹ Afslut håndfri":"🎤 Start håndfri"}</button><button onClick={()=>goStep(0)}>▶ Start guide</button><button onClick={()=>goStep(Math.min(guideStep+1,steps.length-1))}>Næste</button><button onClick={()=>guideStep>=0?say(steps[guideStep].text):say(message)}>Gentag</button><button onClick={stopGuide}>Stop</button><button onClick={()=>{if(voiceEnabled&&"speechSynthesis" in window)window.speechSynthesis.cancel();setVoiceEnabled(v=>!v);}}>{voiceEnabled?"🔊 Tale til":"🔇 Tale fra"}</button></div>
+          <p className="hint">Prøv også mikrofonkommandoerne: “start guide”, “næste”, “gentag” og “stop”. Håndfri genstarter mikrofonen efter hvert svar, når browseren tillader det. På iPhone kan browseren kræve ny aktivering eller stoppe i baggrunden. Talegenkendelse og oplæsning afhænger af browseren. Ingen AI-genererede reparationsinstruktioner.</p>
         </div>
         <div className="controls">
           <button className="primary" onClick={listen} disabled={listening}>{listening ? "🎙 Lytter…" : "🎙 Tal til modellen"}</button>
