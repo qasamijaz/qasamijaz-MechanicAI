@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { referencesFor } from "./references";
 import { OrbitControls, Grid } from "@react-three/drei";
 
-const USER_VEHICLE = { manufacturer: "Suzuki", model: "GSX-S1000F", year: 2021, market: "ikke verificeret" };
+const USER_VEHICLE = { manufacturer: "Suzuki", model: "GSX-S1000F", year: 2020, firstRegistration: "2023-04-05", market: "DK", modelCode: "GSX-S1000FAM0" };
 const PARTS = {
   sump: { title: "Bundkar", detail: "Illustrativ beholder nederst på motoren. Form og placering er ikke verificeret mod Suzuki.", partNumber: "11511-21H01", reference: "1", evidence: "Reservedelskatalog 2019 GSX-S1000F: PAN, OIL." },
   drain: { title: "Bundprop (demo)", detail: "Den orange sekskant er kun et demonstrationspunkt. Brug den ikke til at identificere en bolt på din motorcykel.", partNumber: "09247-14036", reference: "5-1", evidence: "Reservedelskatalog 2019 GSX-S1000F: PLUG, OIL DRAIN. Alternativt nummer 11972-17E70 er også opført; kontrollér variant." },
@@ -226,7 +226,7 @@ export default function App() {
   listenRef.current=listen;
   commandRef.current=command;
   return <main>
-    <header><div><h1>MechanicAI <small>V2.9 LAB</small></h1><p>Suzuki GSX-S1000F · 2021 · interaktiv demo</p></div><span className="status">Isoleret demo</span></header>
+    <header><div><h1>MechanicAI <small>V2.9 LAB</small></h1><p>Suzuki GSX-S1000FAM0 · modelår 2020 · interaktiv demo</p></div><span className="status">Isoleret demo</span></header>
     <section className="workspace">
       <div>
         <div className="controls" style={{marginBottom:"10px"}}>
@@ -235,10 +235,10 @@ export default function App() {
         </div>
         {viewMode==="diagram"?
           <div className="diagram-view" aria-label="Teknisk reservedelsdiagram og komponentoversigt">
-            <span className="eyebrow">2021 GSX-S1000F · DIN MOTORCYKEL · 2019 KILDE ER KUN REFERENCE</span>
+            <span className="eyebrow">2020 GSX-S1000FAM0 · 2019-KILDE KUN REFERENCE</span>
             <h2>Find delen i originaltegningen</h2>
-            <p><strong>OBS: Denne reservedelskilde gælder 2019, ikke din 2021-model.</strong> Nummermarkeringer og reservedelsnumre nedenfor er kun historiske referenceoplysninger, ikke verificerede dele til din motorcykel. Tegningen er ikke indlejret.</p>
-            <a className="diagram-link" href={PARTS_SOURCE} target="_blank" rel="noopener noreferrer">Åbn 2019-referencedigram (ikke verificeret til 2021) ↗</a>
+            <p><strong>OBS: Denne reservedelskilde gælder 2019, ikke din 2020-model (GSX-S1000FAM0).</strong> Nummermarkeringer og reservedelsnumre nedenfor er kun historiske referenceoplysninger, ikke verificerede dele til din motorcykel. Tegningen er ikke indlejret.</p>
+            <a className="diagram-link" href={PARTS_SOURCE} target="_blank" rel="noopener noreferrer">Åbn 2019-referencedigram (ikke verificeret til 2020) ↗</a>
             <div className="diagram-parts">
               {[{id:"sump",n:"1",label:"Bundkar",number:"11511-21H01"},{id:"drain",n:"5-1",label:"Olieaftapningsprop",number:"09247-14036"},{id:"gasket",n:"6",label:"Pakning til prop",number:"09168-14002"},{id:"oilpump",n:"16",label:"Oliepumpe",number:"16400-21H00"}].map(p=><button key={p.id} className={selected===p.id?"active":""} onClick={()=>{if(PARTS[p.id])selectPart(p.id);else {setMessage(p.label+": "+p.number+". Se originaltegningen for placering og bekræft modelvariant.");say(p.label+". Diagramposition "+p.n);}}}><strong>#{p.n}</strong><span>{p.label}<small>{p.number}</small></span></button>)}
             </div>
