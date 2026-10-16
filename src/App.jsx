@@ -62,6 +62,7 @@ function Viewer({ selected, onSelect, reset }) {
 }
 export default function App() {
   const [selected,setSelected]=useState("drain");
+  const [viewMode,setViewMode]=useState("diagram");
   const [reset,setReset]=useState(0);
   const [question,setQuestion]=useState("");
   const [photo,setPhoto]=useState(null);
@@ -180,7 +181,7 @@ export default function App() {
       reply=part.partNumber?"Reservedelsregisteret angiver "+part.partNumber+" for "+part.title+". Kontrollér variant og stelnummer i kilden.":"Vi har endnu ikke verificeret et reservedelsnummer for "+part.title+".";
     }else if(/hvor|find|vis|sidder|fortæl|hvad er/.test(s)){
       selectedRef.current=id;setSelected(id);
-      reply="Jeg markerer "+part.title+" i demonstrationsmodellen. "+part.detail;
+      reply="Jeg har valgt "+part.title+". Åbn originaltegningen for at se diagrampositionen. I 3D-fanen vises kun en illustration. "+part.detail;
     }else if(/moment|newton|spænde|løsne|skrue af|olie mængde|olietype/.test(s)){
       reply="Det kræver verificerede serviceoplysninger for præcis model og årgang. Jeg vil ikke gætte på moment, væske eller fremgangsmåde.";
     }else{
@@ -224,14 +225,31 @@ export default function App() {
   listenRef.current=listen;
   commandRef.current=command;
   return <main>
-    <header><div><h1>MechanicAI <small>V2.8 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
+    <header><div><h1>MechanicAI <small>V2.9 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
     <section className="workspace">
-      <div className="viewer" aria-label="Interaktiv illustrativ 3D-motormodel">
-        <Viewer selected={selected} onSelect={selectPart} reset={reset}/>
-        <div className="viewer-tag">ILLUSTRATIV MODEL · IKKE SUZUKI</div>
+      <div>
+        <div className="controls" style={{marginBottom:"10px"}}>
+          <button className={viewMode==="diagram"?"primary":""} onClick={()=>setViewMode("diagram")}>📖 Teknisk tegning først</button>
+          <button className={viewMode==="3d"?"primary":""} onClick={()=>setViewMode("3d")}>🧊 3D-demo</button>
+        </div>
+        {viewMode==="diagram"?
+          <div className="diagram-view" aria-label="Teknisk reservedelsdiagram og komponentoversigt">
+            <span className="eyebrow">2019 GSX-S1000F · OLIEKAR / OLIEPUMPE · OEM KILDE</span>
+            <h2>Find delen i originaltegningen</h2>
+            <p>Åbn producentens reservedelsdiagram hos katalogudbyderen. Nummermarkeringerne herunder svarer til diagrampositionerne, men er <strong>ikke selve tegningen</strong>.</p>
+            <a className="diagram-link" href={PARTS_SOURCE} target="_blank" rel="noopener noreferrer">Åbn originalt reservedelsdiagram ↗</a>
+            <div className="diagram-parts">
+              {[{id:"sump",n:"1",label:"Bundkar",number:"11511-21H01"},{id:"drain",n:"5-1",label:"Olieaftapningsprop",number:"09247-14036"},{id:"gasket",n:"6",label:"Pakning til prop",number:"09168-14002"},{id:"oilpump",n:"16",label:"Oliepumpe",number:"16400-21H00"}].map(p=><button key={p.id} className={selected===p.id?"active":""} onClick={()=>{if(PARTS[p.id])selectPart(p.id);else {setMessage(p.label+": "+p.number+". Se originaltegningen for placering og bekræft modelvariant.");say(p.label+". Diagramposition "+p.n);}}}><strong>#{p.n}</strong><span>{p.label}<small>{p.number}</small></span></button>)}
+            </div>
+            <p className="hint">Tegningen vises hos den oprindelige udgiver af hensyn til rettigheder og korrekt kildeangivelse. Komponentoversigten er kun et indeks. Bekræft modelvariant før reparation.</p>
+          </div>
+          :<div className="viewer" aria-label="Interaktiv illustrativ 3D-motormodel">
+            <Viewer selected={selected} onSelect={selectPart} reset={reset}/>
+            <div className="viewer-tag">ILLUSTRATIV MODEL · IKKE SUZUKI</div>
+          </div>}
       </div>
       <aside>
-        <h2>AI-mekaniker · V2.8</h2>
+        <h2>AI-mekaniker · V2.9</h2>
         <p className="notice">Dette er en interaktiv demonstration uden verificeret motorgeometri, servicemanual eller reparationsdata. Undlad at bruge placeringerne til arbejde på et køretøj.</p>
         <div className="part-info"><span className="eyebrow">VALGT KOMPONENT</span><strong>{selected ? PARTS[selected].title : "Ingen markering"}</strong><p>{selected ? PARTS[selected].detail : "Tryk på en del af modellen for at vælge den."}</p></div>
         <div className="part-info"><span className="eyebrow">KILDEBASERET RESERVEDELSREGISTER · 2019</span>
