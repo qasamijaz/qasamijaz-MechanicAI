@@ -1,22 +1,96 @@
 import React, { useRef, useState } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, Grid, Html } from "@react-three/drei";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Grid } from "@react-three/drei";
 
-function DemoAssembly({ highlight }) {
-  return <group>
-    <mesh position={[0, 0.2, 0]}><boxGeometry args={[2.7, 0.8, 1.7]}/><meshStandardMaterial color="#657384" metalness={0.55} roughness={0.4}/></mesh>
-    <mesh position={[0, -0.35, 0]}><boxGeometry args={[2.2, 0.35, 1.45]}/><meshStandardMaterial color="#303d4b" metalness={0.7}/></mesh>
-    <mesh position={[0.9, -0.55, 0.25]} rotation={[Math.PI/2,0,0]}><cylinderGeometry args={[0.17,0.17,0.22,6]}/><meshStandardMaterial color={highlight?"#ff9f43":"#aab7c4"} emissive={highlight?"#ff6500":"#000000"} emissiveIntensity={highlight?0.6:0}/></mesh>
-    {highlight && <Html position={[0.9,-0.2,0.25]}><span className="part-label">Demo: bundprop</span></Html>}
+const PARTS = {
+  sump: { title: "Bundkar", detail: "Illustrativ beholder nederst på motoren. Form og placering er ikke verificeret mod Suzuki." },
+  drain: { title: "Bundprop (demo)", detail: "Den orange sekskant er kun et demonstrationspunkt. Brug den ikke til at identificere en bolt på din motorcykel." },
+  filter: { title: "Oliefilter (demo)", detail: "Viser, hvordan en komponent kan udpeges i 3D. Placering og udformning er ikke verificeret." },
+  head: { title: "Topstykke (demo)", detail: "Forenklet øvre motordel til navigation i modellen; ikke en teknisk gengivelse." }
+};
+function Part({ id, selected, onSelect, children }) {
+  return <group onClick={e => { e.stopPropagation(); onSelect(id); }}>{children}</group>;
+}
+function Mat({ selected, color }) {
+  return <meshStandardMaterial color={selected ? "#ffa94d" : color} emissive={selected ? "#a64a00" : "#000000"} emissiveIntensity={selected ? 0.32 : 0} metalness={0.6} roughness={0.42} />;
+}
+function Engine({ selected, onSelect }) {
+  return <group rotation={[0, -0.3, 0]}>
+    <mesh position={[0, 0.22, 0]}><boxGeometry args={[2.55, 1.15, 1.45]}/><meshStandardMaterial color="#64748b" metalness={0.65} roughness={0.43}/></mesh>
+    <Part id="head" selected={selected} onSelect={onSelect}>
+      <mesh position={[0, 1.08, 0]}><boxGeometry args={[2.4, 0.58, 1.33]}/><Mat selected={selected === "head"} color="#8b9aaa"/></mesh>
+      {[-0.72,-0.24,0.24,0.72].map(x => <mesh key={x} position={[x,1.45,0]}><boxGeometry args={[0.14,0.2,1.23]}/><meshStandardMaterial color="#a6b1bd"/></mesh>)}
+    </Part>
+    <Part id="sump" selected={selected} onSelect={onSelect}>
+      <mesh position={[0,-0.62,0]}><boxGeometry args={[2.17,0.56,1.32]}/><Mat selected={selected === "sump"} color="#303f51"/></mesh>
+    </Part>
+    <Part id="drain" selected={selected} onSelect={onSelect}>
+      <mesh position={[0.62,-0.98,0.28]} rotation={[0,0,0]}><cylinderGeometry args={[0.16,0.16,0.16,6]}/><Mat selected={selected === "drain"} color="#c2cbd4"/></mesh>
+    </Part>
+    <Part id="filter" selected={selected} onSelect={onSelect}>
+      <mesh position={[-1.32,-0.15,0.35]} rotation={[0,0,Math.PI/2]}><cylinderGeometry args={[0.35,0.35,0.72,28]}/><Mat selected={selected === "filter"} color="#2c3442"/></mesh>
+    </Part>
+    {[-1.04,1.04].map(x => <mesh key={x} position={[x,0.18,0.77]} rotation={[Math.PI/2,0,0]}><cylinderGeometry args={[0.4,0.4,0.11,32]}/><meshStandardMaterial color="#45566a" metalness={0.7}/></mesh>)}
   </group>;
 }
-function Scene({highlight, resetToken}) {
-  return <Canvas key={resetToken} camera={{position:[4,3,5],fov:45}}><color attach="background" args={["#111b29"]}/><ambientLight intensity={1.5}/><directionalLight position={[3,5,4]} intensity={2}/><DemoAssembly highlight={highlight}/><Grid position={[0,-1,0]} infiniteGrid fadeDistance={18} sectionColor="#34506c" cellColor="#233548"/><OrbitControls makeDefault enableDamping/></Canvas>;
+function Viewer({ selected, onSelect, reset }) {
+  return <Canvas key={reset} camera={{position:[3.9,2.7,4.5],fov:45}} gl={{antialias:true}}>
+    <color attach="background" args={["#111b29"]}/>
+    <ambientLight intensity={1.5}/><directionalLight position={[4,6,5]} intensity={2.3}/>
+    <Engine selected={selected} onSelect={onSelect}/>
+    <Grid position={[0,-1.4,0]} infiniteGrid fadeDistance={16} sectionColor="#30465c" cellColor="#1f3144"/>
+    <OrbitControls makeDefault enableDamping minDistance={2.8} maxDistance={10} target={[0,0.1,0]}/>
+  </Canvas>;
 }
-export default function App(){
- const [highlight,setHighlight]=useState(false),[resetToken,setResetToken]=useState(0),[message,setMessage]=useState("Klar. Vælg en kommando eller brug mikrofonen."),[listening,setListening]=useState(false);
- const recognition=useRef(null);
- function command(input){const s=input.toLocaleLowerCase("da-DK");if(/bundprop|bolt/.test(s)){setHighlight(true);setMessage("Bundproppen er fremhævet på DEMO-modellen. Dette er ikke en verificeret Suzuki-komponent.");}else if(/nulstil|reset|start forfra/.test(s)){setResetToken(x=>x+1);setHighlight(false);setMessage("Visningen er nulstillet.");}else if(/skjul|fjern markering/.test(s)){setHighlight(false);setMessage("Markeringen er fjernet.");}else{setMessage('Ukendt kommando: "'+input+'". Prøv "vis bundproppen".');}}
- function listen(){const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SpeechRecognition){setMessage("Browseren understøtter ikke Web Speech API. Brug knapperne; open-source STT tilføjes senere.");return;}const r=new SpeechRecognition();r.lang="da-DK";r.interimResults=false;r.onresult=e=>command(e.results[0][0].transcript);r.onerror=e=>{setListening(false);setMessage("Mikrofonfejl: "+e.error);};r.onend=()=>setListening(false);recognition.current=r;r.start();setListening(true);}
- return <main><header><div><h1>MechanicAI <small>V1 LAB</small></h1><p>Håndfri, visuel reparationsassistent · lokal prototype</p></div><span className="status">Isoleret demo</span></header><section className="workspace"><div className="viewer"><Scene highlight={highlight} resetToken={resetToken}/><div className="watermark">ILLUSTRATIV 3D · IKKE SUZUKI-GEOMETRI</div></div><aside><h2>AI-mekaniker</h2><p className="notice">Denne prototype bruger en geometrisk testmodel, ikke en servicemanual. Ingen tekniske reparationsinstruktioner er verificeret.</p><div className="reply" aria-live="polite">{message}</div><button onClick={listen} disabled={listening}>{listening?"Lytter…":"🎙 Tal til modellen"}</button><button onClick={()=>command("vis bundproppen")}>Vis bundproppen</button><button onClick={()=>command("skjul markering")}>Skjul markering</button><button onClick={()=>command("nulstil")}>Nulstil visning</button><p className="hint">Brug musen til at rotere og zoome. Stemmestyring bruger foreløbig browserens Web Speech API, ikke Whisper.</p></aside></section></main>;
+export default function App() {
+  const [selected,setSelected]=useState("drain");
+  const [reset,setReset]=useState(0);
+  const [message,setMessage]=useState("Vælg en del i 3D eller brug en af knapperne.");
+  const [listening,setListening]=useState(false);
+  const recognition=useRef(null);
+  function selectPart(id) {setSelected(id);setMessage(PARTS[id].detail);}
+  function command(input) {
+    const s=input.toLocaleLowerCase("da-DK");
+    if (/bundprop|olieprop|bolt/.test(s)) selectPart("drain");
+    else if (/filter/.test(s)) selectPart("filter");
+    else if (/bundkar/.test(s)) selectPart("sump");
+    else if (/topstykke|toppen/.test(s)) selectPart("head");
+    else if (/nulstil|reset|start forfra/.test(s)) {setReset(x=>x+1);setSelected(null);setMessage("Visningen er nulstillet.");}
+    else if (/skjul|fjern/.test(s)) {setSelected(null);setMessage("Markeringen er fjernet.");}
+    else setMessage("Kommando ikke genkendt. Prøv eksempelvis: vis oliefilter.");
+  }
+  function listen() {
+    const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SpeechRecognition) {setMessage("Stemmegenkendelse understøttes ikke i denne browser. Brug knapperne.");return;}
+    try {
+      const r=new SpeechRecognition();r.lang="da-DK";r.interimResults=false;
+      r.onresult=e=>command(e.results[0][0].transcript);
+      r.onerror=e=>{setListening(false);setMessage("Mikrofonfejl: "+e.error);};
+      r.onend=()=>setListening(false);recognition.current=r;r.start();setListening(true);
+    } catch {setListening(false);setMessage("Mikrofonen kunne ikke startes.");}
+  }
+  return <main>
+    <header><div><h1>MechanicAI <small>V2 LAB</small></h1><p>Interaktiv 3D · stemmekommandoer · webprototype</p></div><span className="status">Isoleret demo</span></header>
+    <section className="workspace">
+      <div className="viewer" aria-label="Interaktiv illustrativ 3D-motormodel">
+        <Viewer selected={selected} onSelect={selectPart} reset={reset}/>
+        <div className="viewer-tag">ILLUSTRATIV MODEL · IKKE SUZUKI</div>
+      </div>
+      <aside>
+        <h2>AI-mekaniker · V2</h2>
+        <p className="notice">Dette er en interaktiv demonstration uden verificeret motorgeometri, servicemanual eller reparationsdata. Undlad at bruge placeringerne til arbejde på et køretøj.</p>
+        <div className="part-info"><span className="eyebrow">VALGT KOMPONENT</span><strong>{selected ? PARTS[selected].title : "Ingen markering"}</strong><p>{selected ? PARTS[selected].detail : "Tryk på en del af modellen for at vælge den."}</p></div>
+        <div className="reply" aria-live="polite">{message}</div>
+        <div className="controls">
+          <button className="primary" onClick={listen} disabled={listening}>{listening ? "🎙 Lytter…" : "🎙 Tal til modellen"}</button>
+          <button onClick={()=>selectPart("drain")}>Vis bundproppen</button>
+          <button onClick={()=>selectPart("filter")}>Vis oliefilter</button>
+          <button onClick={()=>selectPart("sump")}>Vis bundkar</button>
+          <button onClick={()=>selectPart("head")}>Vis topstykke</button>
+          <button onClick={()=>command("nulstil")}>Nulstil visning</button>
+        </div>
+        <p className="hint">Drej modellen med fingeren eller musen. Zoom med to fingre eller musehjulet. Tale bruger browserens stemmegenkendelse, ikke Whisper.</p>
+      </aside>
+    </section>
+  </main>;
 }
