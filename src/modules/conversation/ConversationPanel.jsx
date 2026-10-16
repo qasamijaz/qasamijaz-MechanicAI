@@ -17,6 +17,7 @@ export default function ConversationPanel({plan}){
   if(!text.trim()||busy)return;
   setAnswer("");
   if(mode!=="ai"){setConversation(c=>replyConversation(c,text));return;}
+  if(!supported()){setModelStatus("WebGPU er ikke tilgængelig. Brug den regelbaserede fallback.");return;}
   const history=[...conversation.turns,{role:"user",text}];
   setConversation(c=>({...c,turns:history}));
   setBusy(true);setModelStatus("Indlæser eller bruger Hugging Face-modellen lokalt…");
@@ -41,7 +42,7 @@ export default function ConversationPanel({plan}){
  function readLast(){if(!("speechSynthesis" in window))return;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(conversation.turns.at(-1)?.text||"");u.lang="da-DK";window.speechSynthesis.speak(u);}
  return <section aria-label="Samtale om opgaven" style={{border:"1px solid #64748b",padding:12,borderRadius:12,marginTop:12}}>
   <h3>Opgavesamtale</h3>
-  <label>Tilstand <select aria-label="Samtaletilstand" value={mode} onChange={e=>setMode(e.target.value)}><option value="offline">Regelbaseret fallback</option><option value="ai">Hugging Face AI (lokal, eksperimentel)</option></select></label>
+  <label>Tilstand <select aria-label="Samtaletilstand" value={mode} onChange={e=>setMode(e.target.value)}><option value="offline">Regelbaseret fallback</option><option value="ai" disabled={!supported()}>Hugging Face AI (lokal, kræver WebGPU)</option></select></label>
   {mode==="ai"&&<p style={{fontSize:12}}>Model: {MODEL_ID}. Kræver WebGPU, modeldownload og ledig hukommelse. {supported()?"WebGPU registreret.":"WebGPU ikke registreret."}</p>}
   <div aria-live="polite" style={{maxHeight:260,overflowY:"auto",display:"grid",gap:8}}>
    {conversation.turns.map((turn,i)=><div key={i} style={{padding:9,borderRadius:8,background:turn.role==="assistant"?"#193147":"#253a48"}}><strong>{turn.role==="assistant"?"MechanicAI":"Dig"}:</strong> {turn.text}</div>)}
