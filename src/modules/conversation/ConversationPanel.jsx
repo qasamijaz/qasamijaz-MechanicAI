@@ -24,7 +24,7 @@ export default function ConversationPanel({plan}){
   setAnswer("");
   if(mode==="offline"){setConversation(c=>replyConversation(c,text));return;}
   if(mode==="cloud"&&!cloudConfigured()){setModelStatus("Cloud-serveren er ikke konfigureret.");return;}
-  if(mode==="ai"&&!supported()){setModelStatus("WebGPU er ikke tilgængelig. Brug cloud eller fallback.");return;}
+  if(mode==="ai"){setModelStatus("Lokal AI er slået fra. Vælg cloud eller fallback.");return;}
   const history=[...conversation.turns,{role:"user",text}];
   setConversation(c=>({...c,turns:history}));
   setBusy(true);setModelStatus(mode==="cloud"?"Kontakter cloud-AI…":"Indlæser eller bruger Hugging Face-modellen lokalt…");
@@ -53,7 +53,7 @@ export default function ConversationPanel({plan}){
  return <section aria-label="Samtale om opgaven" style={{border:"1px solid #64748b",padding:12,borderRadius:12,marginTop:12}}>
   <h3>Opgavesamtale</h3>
   {diagnostic&&<div role="status" style={{padding:10,border:"1px solid #64748b",borderRadius:8,marginBottom:10}}><strong>AI-diagnosticering</strong><p>{interpretDiagnostic(diagnostic).message}</p><p style={{fontSize:12}}>Fase: {diagnostic.phase} · {new Date(diagnostic.at).toLocaleString("da-DK")}</p><button type="button" onClick={()=>{clearDiagnostic(window.localStorage);setDiagnostic(null);}}>Ryd diagnosticering</button></div>}
-  <label>Tilstand <select aria-label="Samtaletilstand" value={mode} onChange={e=>setMode(e.target.value)}><option value="offline">Regelbaseret fallback</option><option value="cloud" disabled={!cloudConfigured()}>Hugging Face AI i skyen</option><option value="ai" disabled={!supported()}>Hugging Face AI (lokal, kræver WebGPU)</option></select></label>
+  <label>Tilstand <select aria-label="Samtaletilstand" value={mode} onChange={e=>setMode(e.target.value)}><option value="offline">Regelbaseret fallback</option><option value="cloud" disabled={!cloudConfigured()}>Hugging Face AI i skyen</option><option value="ai" disabled>Hugging Face AI (lokal, slået fra på iPhone)</option></select></label>
   {mode==="cloud"&&<label style={{display:"block",marginTop:8}}>PoC-adgangskode <input type="password" autoComplete="off" aria-label="PoC-adgangskode" value={pilotKey} onChange={e=>setPilotKey(e.target.value)} placeholder="Kun til test" /></label>}
   {mode==="cloud"&&<p style={{fontSize:12}}>Modellen kører i skyen, ikke på telefonen. Samtaletekst sendes til AI-serveren og Hugging Face Inference Provider. Ingen verificerede manualer er tilsluttet.</p>}
   {mode==="ai"&&<p style={{fontSize:12}}>Model: {MODEL_ID}. Kræver WebGPU, modeldownload og ledig hukommelse. {supported()?"WebGPU registreret.":"WebGPU ikke registreret."}</p>}
@@ -64,6 +64,6 @@ export default function ConversationPanel({plan}){
    <input aria-label="Svar på spørgsmålet" value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Svar på spørgsmålet" style={{width:"100%",padding:10,marginBottom:8}}/>
    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button type="submit" disabled={busy}>{busy?"Arbejder…":"Send svar"}</button><button type="button" disabled={listening} onClick={speak}>{listening?"Lytter…":"🎤 Svar med stemmen"}</button><button type="button" onClick={readLast}>🔊 Læs svaret op</button></div>
   </form>
-  <p role="status">{modelStatus}</p><p style={{fontSize:12,opacity:.85}}>Dokumentation: {evidence.notice} Dokumentindekset er endnu ikke tilkoblet webappen. Cloud-tilstand kræver en særskilt serverkonfiguration; lokal model er fortsat eksperimentel.</p>
+  <p role="status">{modelStatus}</p><p style={{fontSize:12,opacity:.85}}>Dokumentation: {evidence.notice} Dokumentindekset er endnu ikke tilkoblet webappen. Cloud-tilstand kræver PoC-adgangskode. Lokal WebGPU-model er deaktiveret af hensyn til stabiliteten.</p>
  </section>;
 }
