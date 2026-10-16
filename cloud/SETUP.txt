@@ -1,0 +1,9 @@
+MechanicAI cloud pilot
+
+The static frontend and Python backend are separate Hugging Face Spaces.
+
+The backend starts disabled. Configure HF_TOKEN as a private Space secret, HF_CHAT_MODEL as a model available through Inference Providers, and MECHANICAI_ALLOWED_ORIGIN as the frontend origin. The /health endpoint reports whether configuration is present.
+
+Before setting MECHANICAI_CLOUD_ENABLED=true, implement real user authentication, durable quotas, and provider spending limits. Browser Origin checking alone is not authentication. The per-process request cap is only an emergency safeguard and resets on restart.
+
+When the backend is ready, configure GitHub Actions variable VITE_CLOUD_API_URL to its HTTPS address and redeploy the frontend. No backend has been deployed by these repository changes.
