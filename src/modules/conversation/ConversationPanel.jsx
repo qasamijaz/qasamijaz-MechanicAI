@@ -3,7 +3,7 @@ import {startConversation,replyConversation} from "./index.js";
 import {summarizeEvidence} from "../evidence/index.js";
 import {discoverSuzukiManual} from "../evidence/suzukiDiscovery.js";
 import {generateLocalReply,supported,MODEL_ID} from "../ai-runtime/huggingface.js";
-import {generateCloudReply,cloudConfigured} from "../ai-runtime/cloud.js";
+import {generateCloudReply,cloudConfigured,CLOUD_URL} from "../ai-runtime/cloud.js";
 import {readDiagnostic,recordDiagnostic,interpretDiagnostic,clearDiagnostic} from "../ai-runtime/diagnostics.js";
 export default function ConversationPanel({plan}){
  const [conversation,setConversation]=useState(()=>startConversation(plan.input));
@@ -11,6 +11,7 @@ export default function ConversationPanel({plan}){
  const [listening,setListening]=useState(false);
  const [mode,setMode]=useState("offline");
  const [pilotKey,setPilotKey]=useState("");
+ const [liveDiscovery,setLiveDiscovery]=useState(null);
  const [busy,setBusy]=useState(false);
  const [modelStatus,setModelStatus]=useState("");
  const [diagnostic,setDiagnostic]=useState(null);
@@ -21,6 +22,10 @@ export default function ConversationPanel({plan}){
  function track(phase,error=""){const value=recordDiagnostic(window.localStorage,phase,{model:MODEL_ID,error});setDiagnostic(value);}
  const evidence=summarizeEvidence([]);
  const discovery=discoverSuzukiManual([plan.input,...conversation.turns.filter(t=>t.role==="user").map(t=>t.text)].join(" "));
+ useEffect(()=>{if(!discovery?.exactModel||!discovery?.yearMatch||!cloudConfigured()){setLiveDiscovery(null);return;}
+ const controller=new AbortController();const q=encodeURIComponent("Suzuki GSX-S1000F 2019");
+ fetch(CLOUD_URL+"/manual-discovery?q="+q,{signal:controller.signal}).then(r=>r.ok?r.json():Promise.reject(new Error("Source lookup failed"))).then(setLiveDiscovery).catch(()=>setLiveDiscovery({status:"source_unavailable",sources:[]}));
+ return ()=>controller.abort();},[discovery?.exactModel,discovery?.yearMatch]);
  async function submit(text){
   if(!text.trim()||busy)return;
   setAnswer("");
@@ -62,7 +67,7 @@ export default function ConversationPanel({plan}){
   <div aria-live="polite" style={{maxHeight:260,overflowY:"auto",display:"grid",gap:8}}>
    {conversation.turns.map((turn,i)=><div key={i} style={{padding:9,borderRadius:8,background:turn.role==="assistant"?"#193147":"#253a48"}}><strong>{turn.role==="assistant"?"MechanicAI":"Dig"}:</strong> {turn.text}</div>)}
   </div>
-  {discovery&&<aside aria-label="Automatisk dokumentationssøgning" style={{padding:12,border:"1px solid #64748b",borderRadius:8,marginTop:12}}><strong>Fundet i officielle Suzuki-kilder</strong><p>{discovery.model} · {discovery.year||"årgang ikke angivet"}</p><p>{discovery.notice}</p>{!discovery.exactModel&&<p>Bekræft modelvarianten (GSX-S1000F eller en anden GSX).</p>}<ul>{discovery.sources.map(x=><li key={x.url}><a href={x.url} target="_blank" rel="noopener noreferrer">{x.title}</a> ({x.language})</li>)}</ul><small>Første PoC: kendte producentkilder, endnu ikke live scraping eller udtræk af manualens sider.</small></aside>}
+  {discovery&&<aside aria-label="Automatisk dokumentationssøgning" style={{padding:12,border:"1px solid #64748b",borderRadius:8,marginTop:12}}><strong>Fundet i officielle Suzuki-kilder</strong><p>{discovery.model} · {discovery.year||"årgang ikke angivet"}</p><p>{discovery.notice}</p>{!discovery.exactModel&&<p>Bekræft modelvarianten (GSX-S1000F eller en anden GSX).</p>}<ul>{discovery.sources.map(x=><li key={x.url}><a href={x.url} target="_blank" rel="noopener noreferrer">{x.title}</a> ({x.language})</li>)}</ul><p><strong>Live kontrol:</strong> {liveDiscovery?.status==="catalogue_match"?"Producentens katalog bekræfter model og årgang.":liveDiscovery?.status==="not_found"?"Ingen match i producentens katalog.":liveDiscovery?.status==="source_unavailable"?"Producentens katalog kunne ikke kontrolleres lige nu.":"Afventer kontrol af producentens katalog."}</p><small>Live katalogopslag er ikke det samme som læsning eller verifikation af PDF-manualen.</small></aside>}
   <form onSubmit={e=>{e.preventDefault();submit(answer);}} style={{marginTop:10}}>
    <input aria-label="Svar på spørgsmålet" value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Svar på spørgsmålet" style={{width:"100%",padding:10,marginBottom:8}}/>
    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button type="submit" disabled={busy}>{busy?"Arbejder…":"Send svar"}</button><button type="button" disabled={listening} onClick={speak}>{listening?"Lytter…":"🎤 Svar med stemmen"}</button><button type="button" onClick={readLast}>🔊 Læs svaret op</button></div>
