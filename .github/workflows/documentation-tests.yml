@@ -1,0 +1,35 @@
+name: Documentation module tests
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'modules/**'
+      - 'scripts/discover_manuals.py'
+      - 'scripts/ingest_pdf.py'
+      - 'scripts/search_documents.py'
+      - 'tests/test_document_*.py'
+      - '.github/workflows/documentation-tests.yml'
+  pull_request:
+    paths:
+      - 'modules/**'
+      - 'scripts/discover_manuals.py'
+      - 'scripts/ingest_pdf.py'
+      - 'scripts/search_documents.py'
+      - 'tests/test_document_*.py'
+permissions:
+  contents: read
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile module and CLI code
+        run: python -m compileall -q modules scripts/discover_manuals.py scripts/ingest_pdf.py scripts/search_documents.py
+      - name: Run offline unit tests
+        run: python -m unittest discover -s tests -p 'test_document_*.py' -v
+      - name: Discovery dry run (no network)
+        run: python scripts/discover_manuals.py
