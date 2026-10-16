@@ -1,0 +1,10 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { initialFence, updateFence } from "../src/modules/visualization/fenceDesign.js";
+test("extracts initial fence length from Danish request",()=>assert.equal(initialFence("Jeg vil bygge et hegn på 12 meter").length,12));
+test("updates length by natural text",()=>assert.equal(updateFence(initialFence(),"længde 18 meter").config.length,18));
+test("updates height with decimal comma",()=>assert.equal(updateFence(initialFence(),"højde 1,5 meter").config.height,1.5));
+test("updates post spacing",()=>assert.equal(updateFence(initialFence(),"stolpeafstand 1,8 meter").config.spacing,1.8));
+test("switches board direction",()=>assert.equal(updateFence(initialFence(),"lav det lodret").config.style,"vertical"));
+test("clamps unsafe or excessive dimensions for display",()=>assert.equal(updateFence(initialFence(),"længde 1000 meter").config.length,40));
+test("does not change dimensions for unknown commands",()=>{const c=initialFence();const r=updateFence(c,"kan du male det?");assert.equal(r.changed,false);assert.deepEqual(r.config,c);});
