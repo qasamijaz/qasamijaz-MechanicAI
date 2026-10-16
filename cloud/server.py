@@ -71,7 +71,7 @@ class TextExtractor(HTMLParser):
 def discover_manual(query):
     import re
     q = str(query or "").lower()
-    if not re.search(r"gsx[\\s-]*s[\\s-]*1000[\\s-]*f", q) or "2019" not in q:
+    if not re.search(r"gsx[\s-]*s[\s-]*1000[\s-]*f", q) or "2019" not in q:
         return {"status":"model_unconfirmed","sources":[],"verified_procedure":False}
     req = urllib.request.Request(MANUAL_CATALOGUE, headers={"User-Agent":"MechanicAI-PoC/0.1 (manufacturer catalogue lookup)"})
     try:
@@ -82,7 +82,7 @@ def discover_manual(query):
         parser = TextExtractor()
         parser.feed(raw)
         page = " ".join(" ".join(parser.parts).split())
-        found = bool(re.search(r"GSX-S1000\\s*\\(F\\)\\s*2019", page, re.I))
+        found = bool(re.search(r"GSX[-\s]*S1000\s*\(F\)\s*2019", page, re.I))
         return {"status":"catalogue_match" if found else "not_found","sources":[{"title":"Suzuki Nederland – GSX-S1000(F) 2019", "url":MANUAL_CATALOGUE,"kind":"manufacturer_catalogue","content_verified":False}] if found else [],"verified_procedure":False}
     except (OSError,ValueError,UnicodeError):
         return {"status":"source_unavailable","sources":[],"verified_procedure":False}
