@@ -1,0 +1,14 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {initialDesign,editDesign} from "../src/modules/design-engine/index.js";
+import {planTask} from "../src/modules/task-engine/index.js";
+const make=s=>initialDesign(planTask(s));
+test("fence dimensions from prompt",()=>assert.equal(make("Design et hegn på 12 meter").config.length,12));
+test("lights count from prompt",()=>assert.equal(make("Sæt 6 lamper op").config.count,6));
+test("width edits work for architecture",()=>assert.equal(editDesign(make("Tegn et hus"),"bredde 14 meter").state.config.width,14));
+test("height edits work for fences",()=>assert.equal(editDesign(make("Byg et hegn"),"højde 1,5 meter").state.config.height,1.5));
+test("lamp count changes",()=>assert.equal(editDesign(make("Sæt lamper op"),"antal 5").state.config.count,5));
+test("relative count addition",()=>assert.equal(editDesign(make("Sæt lamper op"),"tilføj 2 lamper").state.config.count,5));
+test("move left works across domains",()=>assert.equal(editDesign(make("Tegn et hus"),"flyt til venstre").state.config.offset,-.1));
+test("unknown commands do not mutate state",()=>{const s=make("Tegn et hus");const r=editDesign(s,"mal himlen blå");assert.equal(r.changed,false);assert.deepEqual(r.state,s);});
+test("bounds protect rendering",()=>assert.equal(editDesign(make("Tegn et hus"),"bredde 999 meter").state.config.width,30));
