@@ -91,7 +91,7 @@ def inspect(source):
                 target = urllib.parse.urlsplit(link)
                 if target.scheme != "https" or target.hostname != parsed.hostname:
                     continue
-                if not re.search(r"\\.pdf(?:$|\\?)|manual|diagram|parts|service|handleiding", link, re.I):
+                if not re.search(r"\.pdf(?:$|\?)|manual|diagram|parts|service|handleiding", link, re.I):
                     continue
                 clean = urllib.parse.urldefrag(link)[0]
                 if clean not in seen:
