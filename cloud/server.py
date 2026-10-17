@@ -122,6 +122,13 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
     def do_OPTIONS(self):
         if self.path not in ("/chat", "/manual-upload") or self.headers.get("Origin") not in ALLOWED_ORIGINS:
+            from urllib.parse import urlsplit
+            origin = self.headers.get("Origin", "")
+            try:
+                origin_host = urlsplit(origin).hostname or "missing"
+            except ValueError:
+                origin_host = "invalid"
+            print("CORS preflight rejected: path=%s origin_host=%s" % (self.path, origin_host), flush=True)
             self.respond(403, {"error": "Origin not allowed"})
             return
         self.send_response(204)
