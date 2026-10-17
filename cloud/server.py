@@ -6,6 +6,8 @@ import hmac
 import threading
 import time
 import os
+import tempfile
+from pathlib import Path
 import urllib.request
 import urllib.error
 from html.parser import HTMLParser
@@ -117,7 +119,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
     def do_OPTIONS(self):
-        if self.path != "/chat" or self.headers.get("Origin") != ORIGIN:
+        if self.path not in ("/chat", "/manual-upload") or self.headers.get("Origin") != ORIGIN:
             self.respond(403, {"error": "Origin not allowed"})
             return
         self.send_response(204)
@@ -140,7 +142,7 @@ class Handler(BaseHTTPRequestHandler):
         self.respond(200 if self.path.split("?", 1)[0] == "/health" else 404,
                      {"status": "ok", "configured": bool(os.getenv("HF_TOKEN")), "enabled": os.getenv("MECHANICAI_CLOUD_ENABLED") == "true"} if self.path.split("?", 1)[0] == "/health" else {"error": "Not found"})
     def do_POST(self):
-        if self.path != "/chat":
+        if self.path not in ("/chat", "/manual-upload"):
             self.respond(404, {"error": "Not found"})
             return
         if self.headers.get("Origin") != ORIGIN:
@@ -150,6 +152,43 @@ class Handler(BaseHTTPRequestHandler):
         supplied_key = self.headers.get("X-MechanicAI-Pilot-Key", "")
         if not pilot_key or not hmac.compare_digest(supplied_key, pilot_key):
             self.respond(401, {"error": "PoC-adgangskode mangler eller er forkert."})
+            return
+        if self.path == "/manual-upload":
+            # Authenticated, raw application/pdf only. No PDF retained after response.
+            # This is NOT an AI inference call and does not enable paid cloud AI.
+            try:
+                if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/pdf":
+                    self.respond(415, {"error": "Kun application/pdf understøttes."})
+                    return
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 1 <= length <= 5 * 1024 * 1024:
+                    self.respond(413, {"error": "PDF skal være højst 5 MB."})
+                    return
+                raw = self.rfile.read(length)
+                if len(raw) != length or not raw.startswith(b"%PDF-"):
+                    self.respond(400, {"error": "Ugyldig PDF."})
+                    return
+                from manual_ingest import ingest_pdf
+                with tempfile.TemporaryDirectory(prefix="mechanicai-pdf-") as directory:
+                    path = Path(directory) / "uploaded.pdf"
+                    path.write_bytes(raw)
+                    result = ingest_pdf(path)
+                # Return bounded preview, not entire extracted manual.
+                self.respond(200, {
+                    "status": "extracted_unverified",
+                    "sha256": result["sha256"],
+                    "page_count": result["page_count"],
+                    "manual_identity_verified": False,
+                    "procedure_verified": False,
+                    "pages": [{"page": page["page"], "text_available": page["text_available"],
+                               "preview": page["text"][:400], "citation": page["citation"]}
+                              for page in result["pages"][:20]],
+                    "warning": result["warning"]
+                })
+            except (ValueError, TypeError):
+                self.respond(400, {"error": "PDF kunne ikke behandles."})
+            except Exception:
+                self.respond(422, {"error": "PDF kunne ikke udtrækkes sikkert."})
             return
         if os.getenv("MECHANICAI_CLOUD_ENABLED") != "true":
             self.respond(503, {"error": "Cloud-AI er endnu ikke aktiveret."})
