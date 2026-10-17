@@ -19,3 +19,13 @@ test("new session has no inherited vehicle or task",()=>{
  assert.equal(second.year,null);
  assert.equal(second.task,null);
 });
+
+test("preparation reply keeps vehicle and task",()=>{
+ let ctx=updateContext(emptyContext(),"Jeg skal skifte motor på min BMW");
+ ctx=updateContext(ctx,"BMW 320 1,6 1988");
+ assert.equal(ctx.phase,"preparation");
+ ctx=updateContext(ctx,"Det har jeg styr på");
+ assert.equal(ctx.phase,"documentation");
+ assert.match(replyFor(ctx),/PDF-manual/);
+ assert.match(replyFor(ctx),/BMW 320 1,6 1988/);
+});
