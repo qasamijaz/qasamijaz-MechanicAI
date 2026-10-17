@@ -87,6 +87,24 @@ def discover_manual(query):
     except (OSError,ValueError,UnicodeError):
         return {"status":"source_unavailable","sources":[],"verified_procedure":False}
 
+# Evidence contract: catalogue listing is not a verified manual or repair instruction.
+def manual_evidence(query, question):
+    discovery = discover_manual(query)
+    source = discovery["sources"][0] if discovery["sources"] else None
+    return {
+        "status": "catalogue_only" if source else discovery["status"],
+        "vehicle": {"make": "Suzuki", "model": "GSX-S1000F", "year": 2019} if source else None,
+        "question": str(question or "")[:500],
+        "evidence_level": "manufacturer_catalogue" if source else "none",
+        "manual_text_verified": False,
+        "page_reference": None,
+        "procedure_verified": False,
+        "specifications_verified": False,
+        "answer": "Producentens katalog har en relevant post, men manualens indhold er ikke verificeret. Jeg kan derfor ikke give modelspecifikke momentværdier eller reparationsanvisninger med kildehenvisning." if source else "Ingen verificeret manual er fundet til denne model og årgang.",
+        "sources": discovery["sources"],
+        "next_step": "Åbn producentens katalog og accepter selv vilkårene, hvis du ønsker at hente manualen. En tilladt kopi kan senere uploades og kontrolleres side for side." if source else "Kontrollér modelbetegnelse og årgang."
+    }
+
 class Handler(BaseHTTPRequestHandler):
     def respond(self, status, data):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -108,6 +126,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-MechanicAI-Pilot-Key")
         self.end_headers()
     def do_GET(self):
+        if self.path.split("?", 1)[0] == "/manual-evidence":
+            from urllib.parse import urlsplit, parse_qs
+            params = parse_qs(urlsplit(self.path).query)
+            self.respond(200, manual_evidence(params.get("q", [""])[0][:180], params.get("question", [""])[0][:500]))
+            return
         if self.path.startswith("/manual-discovery?"):
             from urllib.parse import urlsplit, parse_qs
             params = parse_qs(urlsplit(self.path).query)
