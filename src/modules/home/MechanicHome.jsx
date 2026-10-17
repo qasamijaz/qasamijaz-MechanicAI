@@ -1,6 +1,7 @@
 import React, {useEffect, useRef, useState} from "react";
 import {emptyContext,updateContext,replyFor} from "../conversation/sessionContext.js";
 import {createGuide,moveGuide,guidePrompt} from "../guidance/guideEngine.js";
+import {guideInterruption} from "../guidance/guideInterruption.js";
 import ManualUpload from "../evidence/ManualUpload.jsx";
 import LegacyApp from "../../App.jsx";
 import "./home.css";
@@ -27,6 +28,8 @@ export default function MechanicHome(){
     if(guide && /^(næste|videre|fortsæt)$/i.test(input)){const moved=moveGuide(guide,1);setGuide(moved);setMessages(prev=>[...prev,{role:"user",text:input},{role:"assistant",text:guidePrompt(moved)}]);setDraft("");return;}
     if(guide && /^(tilbage|forrige)$/i.test(input)){const moved=moveGuide(guide,-1);setGuide(moved);setMessages(prev=>[...prev,{role:"user",text:input},{role:"assistant",text:guidePrompt(moved)}]);setDraft("");return;}
     if(guide && /^(gentag|igen)$/i.test(input)){setMessages(prev=>[...prev,{role:"user",text:input},{role:"assistant",text:guidePrompt(guide)}]);setDraft("");return;}
+    const interruption=guideInterruption(input,guide);
+    if(interruption){setMessages(prev=>[...prev,{role:"user",text:input},{role:"assistant",text:interruption}]);setDraft("");return;}
     const next=updateContext(context,input);
     setContext(next);
     if(next.task!==context.task || next.maker!==context.maker || next.model!==context.model || next.year!==context.year)setGuide(null);
