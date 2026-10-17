@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL = os.getenv("HF_CHAT_MODEL", "openai/gpt-oss-20b:cheapest")
 ORIGIN = os.getenv("MECHANICAI_ALLOWED_ORIGIN", "https://qasammekai-mechanicai.hf.space")
+ALLOWED_ORIGINS = {ORIGIN, "https://qasammekai-mechanicai.hf.space", "https://huggingface.co"}
 MAX_BYTES = 16000
 # Hard process-local cap; resets on restart and is NOT a substitute for provider spend limits.
 MAX_REQUESTS = int(os.getenv("MECHANICAI_MAX_REQUESTS", "20"))
@@ -114,16 +115,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", ORIGIN)
+        if self.headers.get("Origin") in ALLOWED_ORIGINS:
+            self.send_header("Access-Control-Allow-Origin", self.headers["Origin"])
         self.send_header("Vary", "Origin")
         self.end_headers()
         self.wfile.write(body)
     def do_OPTIONS(self):
-        if self.path not in ("/chat", "/manual-upload") or self.headers.get("Origin") != ORIGIN:
+        if self.path not in ("/chat", "/manual-upload") or self.headers.get("Origin") not in ALLOWED_ORIGINS:
             self.respond(403, {"error": "Origin not allowed"})
             return
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", ORIGIN)
+        self.send_header("Access-Control-Allow-Origin", self.headers["Origin"])
         self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-MechanicAI-Pilot-Key")
         self.end_headers()
