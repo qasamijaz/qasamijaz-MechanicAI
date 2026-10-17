@@ -1,6 +1,7 @@
 /** Cloud AI transport. The browser never receives the Hugging Face access token. */
 export const CLOUD_URL=(import.meta.env?.VITE_CLOUD_API_URL||"https://mechanicai-cloud-poc-poc.up.railway.app").replace(/\/$/,"");
-export const cloudConfigured=()=>/^https:\/\//.test(CLOUD_URL);
+// A reachable backend does not imply that paid/generative AI has been enabled.
+export const cloudConfigured=()=>import.meta.env?.VITE_CLOUD_AI_ENABLED==="true" && /^https:\/\//.test(CLOUD_URL);
 export async function generateCloudReply(history,{signal,pilotKey}={}){
  if(!pilotKey)throw new Error("Indtast PoC-adgangskoden.");
  if(!cloudConfigured())throw new Error("Cloud-AI er ikke konfigureret endnu.");
