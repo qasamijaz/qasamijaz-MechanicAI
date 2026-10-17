@@ -154,7 +154,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path not in ("/chat", "/manual-upload"):
             self.respond(404, {"error": "Not found"})
             return
-        if self.headers.get("Origin") != ORIGIN:
+        if self.headers.get("Origin") not in ALLOWED_ORIGINS:
             self.respond(403, {"error": "Origin not allowed"})
             return
         pilot_key = os.getenv("MECHANICAI_PILOT_KEY", "")
