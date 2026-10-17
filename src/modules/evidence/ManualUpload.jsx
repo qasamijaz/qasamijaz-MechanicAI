@@ -1,5 +1,5 @@
 import React,{useState} from "react";
-import {CLOUD_URL,cloudConfigured} from "../ai-runtime/cloud.js";
+import {CLOUD_URL} from "../ai-runtime/cloud.js";
 
 /** Upload is explicitly user-initiated. Do not retain PDFs or pilot keys in storage. */
 export default function ManualUpload(){
@@ -12,7 +12,7 @@ export default function ManualUpload(){
   event.preventDefault();setError("");setResult(null);
   if(!file||file.type!=="application/pdf"||file.size<1||file.size>5*1024*1024){setError("Vælg en PDF på højst 5 MB.");return;}
   if(!key.trim()){setError("Indtast PoC-adgangskoden.");return;}
-  if(!cloudConfigured()){setError("MechanicAI-serveren er ikke konfigureret.");return;}
+  if(!/^https:\/\//.test(CLOUD_URL)){setError("MechanicAI-serverens adresse er ikke konfigureret.");return;}
   setLoading(true);
   try{
    const response=await fetch(CLOUD_URL+"/manual-upload",{method:"POST",headers:{"Content-Type":"application/pdf","X-MechanicAI-Pilot-Key":key},body:file});
