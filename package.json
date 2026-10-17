@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/*.test.mjs src/modules/conversation/sessionContext.test.js src/modules/guidance/guideEngine.test.js"
+    "test": "node --test tests/*.test.mjs src/modules/conversation/sessionContext.test.js src/modules/guidance/guideEngine.test.js src/modules/guidance/guideInterruption.test.js"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",
