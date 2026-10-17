@@ -1,13 +1,15 @@
 // Deterministic, session-only context. Never presents guesses as verified repair instructions.
 const makers=["BMW","Suzuki","Honda","Yamaha","Toyota","Volkswagen","VW","Ford","Audi","Mercedes","Kawasaki","Tesla","Volvo","Peugeot","Opel"];
-export const emptyContext=()=>({maker:null,model:null,year:null,task:null,category:null});
+export const emptyContext=()=>({maker:null,model:null,year:null,task:null,category:null,phase:"identify"});
 export function updateContext(previous,input){
  const next={...previous},s=input.trim(),low=s.toLocaleLowerCase("da-DK");
+ if(next.phase==="preparation" && /styr på|har værktøj|klar|spring over/i.test(low))next.phase="documentation";
+ if(next.phase==="preparation" && /gennemgå|hvilket værktøj|værktøj først|nej/i.test(low))next.phase="tools";
  const maker=makers.find(m=>new RegExp("\\b"+m+"\\b","i").test(s));
  if(maker)next.maker=maker==="VW"?"Volkswagen":maker;
  const year=s.match(/\b(?:19|20)\d{2}\b/);if(year)next.year=Number(year[0]);
  const taskPatterns=[[/skift(?:e|er)?\s+(?:hele\s+)?motor(?:en)?|motorudskiftning/i,"skifte motor"],[/skift(?:e|er)?\s+(?:motor)?olie|olieskift/i,"skifte olie"],[/bremse(?:r|klodser|skiver)?|skifte bremser/i,"arbejde med bremser"],[/reparere|fejlsøg|virker ikke/i,"fejlsøge"]];
- const found=taskPatterns.find(([re])=>re.test(low));if(found)next.task=found[1];
+ const found=taskPatterns.find(([re])=>re.test(low));if(found){next.task=found[1];next.phase="identify";}
  if(/motorcykel|suzuki|yamaha|kawasaki/.test(low))next.category="motorcykel";
  else if(/\bbil\b|bmw|toyota|volkswagen|ford|audi|mercedes|volvo/.test(low))next.category="bil";
  if(next.maker){
@@ -18,6 +20,7 @@ export function updateContext(previous,input){
    if(words.length)next.model=words.slice(0,2).join(" ");
   }
  }
+ if(next.task && next.maker && next.model && next.year && next.phase==="identify")next.phase="preparation";
  // A bare vehicle description after a task is a clarification, not a new task.
  return next;
 }
@@ -27,5 +30,7 @@ export function replyFor(context){
  if(!context.maker)return "Vi arbejder med at "+context.task+". Hvilket mærke og hvilken model drejer det sig om?";
  if(!context.model)return "Forstået: "+context.task+" på din "+context.maker+". Hvilken model er det?";
  if(!context.year)return "Godt. Vi arbejder med at "+context.task+" på "+vehicle+". Hvilket modelår er det?";
+ if(context.phase==="documentation")return "Godt, så springer vi værktøjsgennemgangen over. Før vi går i gang med "+context.task+" på "+vehicle+", skal vi finde den korrekte servicemanual og kontrollere modelvarianten. Har du en PDF-manual, du kan vedhæfte?";
+ if(context.phase==="tools")return "Vi gennemgår værktøjet først. Jeg mangler stadig en verificeret procedure for "+vehicle+", så jeg vil ikke gætte på specialværktøj eller specifikationer. Har du en servicemanual, du kan vedhæfte?";
  return "Jeg har nu opgaven: "+context.task+" på "+vehicle+". Vil du starte med en gennemgang af værktøj og forberedelse, eller har du allerede styr på det? Før konkrete reparationstrin skal vi finde og kontrollere dokumentation for den præcise variant.";
 }
