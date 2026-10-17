@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL = os.getenv("HF_CHAT_MODEL", "openai/gpt-oss-20b:cheapest")
 ORIGIN = os.getenv("MECHANICAI_ALLOWED_ORIGIN", "https://qasammekai-mechanicai.hf.space")
-ALLOWED_ORIGINS = {ORIGIN, "https://qasammekai-mechanicai.hf.space", "https://huggingface.co"}
+ALLOWED_ORIGINS = {ORIGIN, "https://qasammekai-mechanicai.hf.space", "https://qasammekai-mechanicai.static.hf.space", "https://huggingface.co"}
 MAX_BYTES = 16000
 # Hard process-local cap; resets on restart and is NOT a substitute for provider spend limits.
 MAX_REQUESTS = int(os.getenv("MECHANICAI_MAX_REQUESTS", "20"))
