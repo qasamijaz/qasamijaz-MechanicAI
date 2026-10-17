@@ -6,11 +6,11 @@ const SOURCES=[
 ];
 export function discoverSuzukiManual(input){
  const value=String(input||"").toLowerCase();
- if(!/\\b(?:suzuki|gsx)\\b/.test(value)&&!value.includes("gsx-"))return null;
- if(!/gsx[\\s-]*[sr]?[\\s-]*1000/.test(value))return null;
- const year=(value.match(/\\b(20(?:1[6-9]|20))\\b/)||[])[1]||null;
- const exact=/gsx[\\s-]*s[\\s-]*1000[\\s-]*f\\b/.test(value);
- const incompatible=/gsx[\\s-]*r[\\s-]*1000/.test(value);
+ if(!/\b(?:suzuki|gsx)\b/.test(value)&&!value.includes("gsx-"))return null;
+ if(!/gsx[\s-]*[sr]?[\s-]*1000/.test(value))return null;
+ const year=(value.match(/\b(20(?:1[6-9]|20))\b/)||[])[1]||null;
+ const exact=/gsx[\s-]*s[\s-]*1000[\s-]*f\b/.test(value);
+ const incompatible=/gsx[\s-]*r[\s-]*1000/.test(value);
  if(incompatible)return {make:"Suzuki",model:"GSX-R1000",year,exactModel:false,yearMatch:false,sources:[],verifiedProcedure:false,notice:"GSX-R1000 er en anden model. GSX-S1000F-manualen må ikke bruges."};
  const yearMatch=year==="2019";
  return {make:"Suzuki",model:exact?"GSX-S1000F":"GSX-S1000 (F-variant ubekræftet)",year,exactModel:exact,yearMatch,sources:yearMatch?SOURCES:[],verifiedProcedure:false,notice:yearMatch?"Officielle Suzuki-manualoversigter for 2019 fundet. PDF-indhold, præcis variant og arbejdsprocedure er ikke verificeret.":"Angiv årgang 2019 for at få relevante manualkilder; ingen procedure er verificeret."};
