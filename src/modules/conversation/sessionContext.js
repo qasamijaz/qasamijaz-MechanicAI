@@ -12,7 +12,7 @@ export function updateContext(previous,input){
  else if(/\bbil\b|bmw|toyota|volkswagen|ford|audi|mercedes|volvo/.test(low))next.category="bil";
  if(next.maker){
   const escaped=next.maker==="Volkswagen"?"(?:Volkswagen|VW)":next.maker;
-  const match=s.match(new RegExp("\\b"+escaped+"\\s+([a-z0-9-]+(?:\\s+[a-z0-9-]+){0,2})","i"));
+  const match=s.match(new RegExp("\\b"+escaped+"\\s+([a-z0-9-]+(?:\\s+[a-z0-9]+(?:[,.][0-9]+)?){0,2})","i"));
   if(match){
    const words=match[1].split(/\s+/).filter(w=>!(/^(19|20)\d{2}$/.test(w)||/^(fra|årgang|model|jeg|skal|med|på|min|og|at|er)$/i.test(w)));
    if(words.length)next.model=words.slice(0,2).join(" ");
