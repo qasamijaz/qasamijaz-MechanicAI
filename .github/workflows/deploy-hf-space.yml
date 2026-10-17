@@ -21,7 +21,10 @@ jobs:
         env:
           VITE_CLOUD_API_URL: ${{ vars.VITE_CLOUD_API_URL }}
         run: |
-          npm install --no-audit --no-fund
+          # Skip ONNX/CUDA optional install downloads; local WebGPU AI is disabled on iPhone.
+          npm install --ignore-scripts --no-audit --no-fund
+          # Restore only the native bundler binary validation, not ONNX install scripts.
+          npm rebuild esbuild --no-audit --no-fund
           npm test
           npm run build
           test -f dist/index.html
