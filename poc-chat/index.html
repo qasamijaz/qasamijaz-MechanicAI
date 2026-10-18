@@ -22,29 +22,109 @@ form{display:flex;align-items:end;gap:9px}textarea{min-height:52px;max-height:14
 <button data-prompt="Jeg vil bygge et havehegn. Hvor starter jeg?">🪚 Byggeri</button>
 <button data-prompt="Min opvaskemaskine vil ikke starte. Hvordan fejlsøger jeg?">🛠️ Fejlfinding</button>
 </div></section></div>
-<section class="taskpanel" id="taskpanel" hidden aria-label="Guidet opgave"><div class="taskhead" id="taskhead">GUIDET OPGAVE · TRIN 1</div><div class="taskvisual" id="taskvisual">Visuel vejledning: ingen verificeret illustration for denne maskine endnu. AI må ikke gætte komponentplaceringer.</div><div class="taskcontrols"><button class="secondary" type="button" id="next">Næste trin</button><button class="secondary" type="button" id="again">Gentag</button><button class="secondary" type="button" id="pause">Stop</button></div></section>
+<section class="taskpanel" id="taskpanel" hidden aria-label="Guidet opgave"><div class="taskhead" id="taskhead">GUIDET OPGAVE · TRIN 1</div><div class="taskvisual" id="taskvisual">Visuel vejledning: ingen verificeret illustration for denne maskine endnu. AI må ikke gætte komponentplaceringer.</div><div id="taskmemory" class="sub" aria-live="polite"></div><div class="taskcontrols"><button class="secondary" type="button" id="next">Næste trin</button><button class="secondary" type="button" id="again">Gentag</button><button class="secondary" type="button" id="pause">Stop</button></div></section>
 <div id="composer"><div id="status" role="status">Klar til samtale</div><form id="form"><textarea id="message" rows="2" placeholder="Beskriv din opgave…" aria-label="Din besked" maxlength="1200" required></textarea><button type="submit" id="send">Send</button></form>
-<div class="voicebar"><button class="secondary" type="button" id="clear">Ny samtale</button><button class="secondary" type="button" id="mic">🎙️ Tal</button><button class="secondary" type="button" id="repeat">🔊 Læs svar</button><label><input type="checkbox" id="autovoice"> Oplæs AI-svar</label></div><div class="sub">AI kan tage fejl. Tekniske specifikationer og sikkerhedskritiske anvisninger kræver verificeret dokumentation. Undlad personfølsomme oplysninger. Billeder er ikke tilsluttet endnu.</div></div></main>
+<div class="voicebar"><button class="secondary" type="button" id="clear">Ny samtale</button><button class="secondary" type="button" id="mic">🎙️ Tal</button><button class="secondary" type="button" id="repeat">🔊 Læs svar</button><label><input type="checkbox" id="autovoice"> Oplæs AI-svar</label><label><input type="checkbox" id="handsfree"> Samtaletilstand (beta)</label></div><div class="sub">AI kan tage fejl. Tekniske specifikationer og sikkerhedskritiske anvisninger kræver verificeret dokumentation. Undlad personfølsomme oplysninger. Billeder er ikke tilsluttet endnu. Samtaletilstand kræver browserstøtte, mikrofontilladelse og aktiv skærm; iPhone Safari kan begrænse automatisk genstart.</div></div></main>
 <script>
-const feed=document.querySelector('#feed'),input=document.querySelector('#message'),send=document.querySelector('#send'),status=document.querySelector('#status');
-let lastReply='',recognition=null;const mic=document.querySelector('#mic'),repeat=document.querySelector('#repeat'),autovoice=document.querySelector('#autovoice');
-function speak(text){if(!('speechSynthesis' in window)){status.textContent='Oplæsning understøttes ikke her';return}window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(text.replace(/[*#]/g,''));utterance.lang='da-DK';utterance.rate=.95;window.speechSynthesis.speak(utterance)}
-repeat.onclick=()=>{if(lastReply)speak(lastReply);else status.textContent='Intet AI-svar at læse op endnu'};
+
+const $=s=>document.querySelector(s),feed=$('#feed'),input=$('#message'),send=$('#send'),status=$('#status');
+const mic=$('#mic'),repeat=$('#repeat'),autovoice=$('#autovoice'),handsfree=$('#handsfree');
+const taskpanel=$('#taskpanel'),taskhead=$('#taskhead'),taskmemory=$('#taskmemory');
 const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-if(!SpeechRecognition){mic.disabled=true;mic.title='Taleinput understøttes ikke af denne browser'}else{mic.onclick=()=>{if(busy)return;if(recognition){recognition.stop();return}recognition=new SpeechRecognition();recognition.lang='da-DK';recognition.interimResults=false;recognition.onresult=e=>{input.value=(input.value+' '+e.results[0][0].transcript).trim();status.textContent='Tale genkendt – sender…';document.querySelector('#form').requestSubmit()};recognition.onerror=()=>{status.textContent='Taleinput fejlede – brug tekstfeltet'};recognition.onend=()=>{recognition=null;mic.textContent='🎙️ Tal'};mic.textContent='Stop optagelse';try{recognition.start()}catch{recognition=null;mic.textContent='🎙️ Tal'}}}
-let taskActive=false,stepNumber=0,taskPaused=false;const completed=/\b(jeg har|nu har jeg|jeg er|den er|det er|færdig|klaret|gjort|fik den|har skruet|har løsnet|har fjernet|har sat)\b/i;const question=/[?]|\b(hvad|hvorfor|hvordan|hvor|kan jeg|skal jeg|men|problemet|sidder fast|vent)\b/i;const taskpanel=document.querySelector('#taskpanel'),taskhead=document.querySelector('#taskhead');function updateTask(){taskpanel.hidden=!taskActive;taskhead.textContent='GUIDET OPGAVE · TRIN '+stepNumber}function taskCommand(cmd){if(busy)return;if(cmd==='stop'){taskPaused=true;taskActive=false;window.speechSynthesis?.cancel();updateTask();status.textContent='Opgaven sat på pause';return}if(cmd==='gentag'){if(lastReply)speak(lastReply);return}input.value='Næste trin. Giv kun ét kort trin. Vent derefter på min bekræftelse.';document.querySelector('#form').requestSubmit()};document.querySelector('#next').onclick=()=>taskCommand('næste');document.querySelector('#again').onclick=()=>taskCommand('gentag');document.querySelector('#pause').onclick=()=>taskCommand('stop');
-let turns=[],invite=sessionStorage.getItem('mechanicai_poc_invite')||'',busy=false;
-function bubble(role,text){document.querySelector('#welcome')?.remove();const node=document.createElement('div');node.className='bubble '+role;node.textContent=text;feed.append(node);feed.scrollTop=feed.scrollHeight;return node}
+const STORAGE='mechanicai_poc_task_v2';
+let invite=sessionStorage.getItem('mechanicai_poc_invite')||'',busy=false,recognition=null,voiceWanted=false,speaking=false,lastReply='',turns=[];
+let task={active:false,paused:false,step:0,completed:[],issue:'',current:''};
+try{
+ const saved=JSON.parse(localStorage.getItem(STORAGE)||'null');
+ if(saved&&saved.version===2&&Array.isArray(saved.turns)&&saved.task){
+  turns=saved.turns.filter(t=>['user','assistant'].includes(t.role)&&typeof t.content==='string').slice(-10);
+  const t=saved.task;
+  task={active:!!t.active,paused:!!t.paused,step:Number.isInteger(t.step)?Math.max(0,Math.min(99,t.step)):0,completed:Array.isArray(t.completed)?t.completed.filter(x=>typeof x==='string').slice(-12):[],issue:typeof t.issue==='string'?t.issue.slice(0,200):'',current:typeof t.current==='string'?t.current.slice(0,600):''};
+  lastReply=turns.filter(t=>t.role==='assistant').at(-1)?.content||'';
+ }
+}catch{}
+function persist(){try{localStorage.setItem(STORAGE,JSON.stringify({version:2,turns:turns.slice(-10),task}))}catch{}}
+function updateTask(){
+ taskpanel.hidden=!task.active&&!task.paused;
+ taskhead.textContent=(task.paused?'OPGAVE SAT PÅ PAUSE':'GUIDET OPGAVE')+' · TRIN '+task.step;
+ taskmemory.textContent=(task.current?'Aktuelt: '+task.current+'  ':'')+(task.completed.length?'Registreret: '+task.completed.length+' afsluttede trin.  ':'')+(task.issue?'Afvigelse: '+task.issue:'');
+ $('#pause').textContent=task.paused?'Genoptag':'Stop';
+}
+function bubble(role,text){$('#welcome')?.remove();const el=document.createElement('div');el.className='bubble '+role;el.textContent=text;feed.append(el);feed.scrollTop=feed.scrollHeight;return el}
+if(turns.length){$('#welcome')?.remove();for(const t of turns)bubble(t.role,t.content)}
+updateTask();
+function stopListening(){if(recognition){const r=recognition;recognition=null;try{r.abort()}catch{}}mic.textContent='🎙️ Tal'}
+function stopVoice(){voiceWanted=false;handsfree.checked=false;stopListening();window.speechSynthesis?.cancel();speaking=false;status.textContent='Lyddialog stoppet'}
+function startListening(){
+ if(!voiceWanted||busy||speaking||document.hidden||recognition||!SpeechRecognition)return;
+ const r=new SpeechRecognition();recognition=r;r.lang='da-DK';r.interimResults=false;r.continuous=false;
+ r.onresult=e=>{const spoken=e.results[0]?.[0]?.transcript?.trim();if(!spoken)return;input.value=spoken;status.textContent='Hørte: '+spoken;$('#form').requestSubmit()};
+ r.onerror=e=>{status.textContent='Mikrofon: '+(e.error||'fejl');if(['not-allowed','service-not-allowed','audio-capture'].includes(e.error))stopVoice()};
+ r.onend=()=>{if(recognition===r)recognition=null;mic.textContent='🎙️ Tal';/* Do not auto-restart after silence: browsers can reject unattended microphone starts. */};
+ mic.textContent='🎙️ Lytter…';try{r.start()}catch{recognition=null;mic.textContent='🎙️ Tal';status.textContent='Tryk Tal igen for at fortsætte'}
+}
+function speak(text){
+ if(!('speechSynthesis' in window)){status.textContent='Oplæsning understøttes ikke her';return}
+ stopListening();window.speechSynthesis.cancel();speaking=true;
+ const u=new SpeechSynthesisUtterance(text.replace(/[*#]/g,''));u.lang='da-DK';u.rate=.95;
+ u.onend=u.onerror=()=>{speaking=false;if(voiceWanted){status.textContent='Svar afsluttet – tryk Tal, hvis mikrofonen ikke starter';startListening()}};
+ window.speechSynthesis.speak(u)
+}
+repeat.onclick=()=>lastReply?speak(lastReply):status.textContent='Intet svar endnu';
+if(!SpeechRecognition){mic.disabled=true;handsfree.disabled=true;mic.title='Browseren tilbyder ikke talegenkendelse';handsfree.title=mic.title}
+mic.onclick=()=>{if(busy)return;if(recognition){stopListening();return}voiceWanted=handsfree.checked||false; if(!voiceWanted)voiceWanted=true;startListening()};
+handsfree.onchange=()=>{voiceWanted=handsfree.checked;if(voiceWanted){autovoice.checked=true;startListening()}else{stopListening();status.textContent='Samtaletilstand slået fra'}};
+document.addEventListener('visibilitychange',()=>{if(document.hidden){stopListening();status.textContent='Mikrofon pauset: skærmen er ikke aktiv'}});
 document.querySelectorAll('[data-prompt]').forEach(b=>b.onclick=()=>{input.value=b.dataset.prompt;input.focus()});
-document.querySelector('#clear').onclick=()=>{if(busy)return;turns=[];lastReply='';taskActive=false;taskPaused=false;stepNumber=0;updateTask();window.speechSynthesis?.cancel();feed.innerHTML='<section class="title"><h1>Ny samtale</h1><p>Hvad arbejder du på?</p></section>';status.textContent='Klar til samtale';input.focus()};
-document.querySelector('#form').onsubmit=async e=>{
+function reset(){if(busy)return;stopVoice();turns=[];lastReply='';task={active:false,paused:false,step:0,completed:[],issue:'',current:''};persist();updateTask();feed.innerHTML='<section id="welcome" class="title"><h1>Ny samtale</h1><p>Hvad arbejder du på?</p></section>';status.textContent='Klar til samtale'}
+$('#clear').onclick=reset;
+function classify(text){
+ const s=text.toLocaleLowerCase('da-DK').trim();
+ if(/^(stop|pause|hold inde)[.! ]*$/.test(s))return 'pause';
+ if(/^(gentag|sig det igen)[.! ]*$/.test(s))return 'repeat';
+ if(/^(næste|videre|fortsæt)[.! ]*$/.test(s))return 'next';
+ if(/^(genoptag|fortsæt opgaven)[.! ]*$/.test(s))return 'resume';
+ if(/\b(vent|problem|sidder fast|men der|virker ikke|kan ikke|hvad gør jeg|hvorfor|hvordan|skal jeg)\b/i.test(s)||s.includes('?'))return 'issue';
+ if(/\b(jeg har|nu har jeg|jeg er færdig|den er af|det er gjort|færdig med|har skruet|har fjernet|har løsnet)\b/i.test(s))return 'progress';
+ return 'normal';
+}
+function taskCommand(cmd){
+ if(busy)return;
+ if(cmd==='pause'){task.paused=true;task.active=false;stopVoice();persist();updateTask();return}
+ if(cmd==='repeat'){if(lastReply)speak(lastReply);return}
+ if(cmd==='resume'){task.paused=false;task.active=true;persist();updateTask();status.textContent='Opgaven genoptaget';return}
+ input.value='Næste trin';$('#form').requestSubmit()
+}
+$('#next').onclick=()=>taskCommand('next');
+$('#again').onclick=()=>taskCommand('repeat');
+$('#pause').onclick=()=>taskCommand(task.paused?'resume':'pause');
+$('#form').onsubmit=async e=>{
  e.preventDefault();if(busy)return;const text=input.value.trim();if(!text)return;
+ const intent=classify(text);
+ if(intent==='pause'||intent==='repeat'||intent==='resume'){input.value='';taskCommand(intent);return}
  if(!invite){invite=prompt('Indtast din private POC-adgangskode')?.trim()||'';if(!invite)return;sessionStorage.setItem('mechanicai_poc_invite',invite)}
- const command=text.toLocaleLowerCase('da-DK').replace(/[.!?]/g,'').trim();if(command==='gentag'){taskCommand('gentag');input.value='';return}if(command==='stop'||command==='pause'){taskCommand('stop');input.value='';return}if(command==='næste' || command==='videre'){input.value='Næste trin. Giv kun ét kort trin. Vent derefter på min bekræftelse.';return document.querySelector('#form').requestSubmit()}const advance=taskActive&&( /^Næste trin\./.test(text) || (completed.test(text)&&!question.test(text)));input.value='';turns.push({role:'user',content:text});bubble('user',text);const reply=bubble('assistant','Et øjeblik, jeg undersøger…');busy=true;send.disabled=true;status.textContent='MechanicAI tænker…';
- try{const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json','X-MechanicAI-Invite':invite},body:JSON.stringify({messages:turns.slice(-10)})});
- const result=await response.json();if(!response.ok)throw new Error(result.error||'AI-serveren kunne ikke svare');
- reply.textContent=result.reply;lastReply=result.reply;if(!taskActive&&!taskPaused){taskActive=true;stepNumber=1}else if(advance){stepNumber++}updateTask();if(autovoice.checked)speak(result.reply);turns.push({role:'assistant',content:result.reply});status.textContent='Klar til næste spørgsmål';
- }catch(err){reply.textContent='Kunne ikke få AI-svar: '+err.message;status.textContent='Prøv igen';if(/adgangskode/i.test(err.message)){invite='';sessionStorage.removeItem('mechanicai_poc_invite')}}
- finally{busy=false;send.disabled=false;feed.scrollTop=feed.scrollHeight;input.focus()}
+ input.value='';stopListening();
+ const previous=JSON.parse(JSON.stringify(task));
+ const messages=[...turns,{role:'user',content:text}].slice(-10);
+ const reply=bubble('assistant','Et øjeblik, jeg undersøger…');
+ bubble('user',text);feed.append(reply);
+ busy=true;send.disabled=true;status.textContent='MechanicAI tænker…';
+ try{
+  const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json','X-MechanicAI-Invite':invite},body:JSON.stringify({messages,task})});
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'AI-serveren kunne ikke svare');
+  turns=messages.concat({role:'assistant',content:result.reply}).slice(-10);
+  reply.textContent=result.reply;lastReply=result.reply;
+  if(!task.active&&!task.paused){task.active=true;task.step=Math.max(1,task.step)}
+  else if(task.active&&(intent==='next'||intent==='progress')){if(task.current)task.completed.push(task.current.slice(0,200));task.completed=task.completed.slice(-12);task.step=Math.min(99,task.step+1)}
+  if(intent==='issue')task.issue=text.slice(0,200);else if(intent==='next'||intent==='progress')task.issue='';
+  task.current=result.reply.slice(0,600);persist();updateTask();
+  status.textContent='Klar til næste spørgsmål';
+  if(autovoice.checked||voiceWanted)speak(result.reply);
+  else if(voiceWanted)startListening();
+ }catch(err){
+  task=previous;reply.textContent='Kunne ikke få AI-svar: '+err.message;status.textContent='Prøv igen';
+  if(/adgangskode/i.test(err.message)){invite='';sessionStorage.removeItem('mechanicai_poc_invite')}
+ }finally{busy=false;send.disabled=false;feed.scrollTop=feed.scrollHeight;if(voiceWanted&&!speaking)startListening()}
 };
+
 </script></body></html>
