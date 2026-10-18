@@ -14,6 +14,7 @@ from pathlib import Path
 from auth_store import Sessions
 from quota_store import QuotaStore
 from login_limiter import LoginLimiter
+from model_queue import ModelQueue
 
 HOST = "127.0.0.1"
 MODEL = os.getenv("PILOT_MODEL", "qwen2.5:3b")
@@ -25,7 +26,8 @@ SYSTEM = ("Du er en hjælpsom dansk assistent. Du har ikke verificerede manualer
 AUTH = None
 QUOTAS = None
 LOGIN_LIMITER = None
-MODEL_LOCK = threading.BoundedSemaphore(1)
+MODEL_QUEUE = ModelQueue(max_waiters=int(os.getenv("PILOT_MAX_WAITERS", "3")),
+                         wait_seconds=float(os.getenv("PILOT_WAIT_SECONDS", "8")))
 
 def configure(data_dir=None, invite_hashes=None, per_user=30, global_limit=300):
     global AUTH, QUOTAS, LOGIN_LIMITER
@@ -128,8 +130,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(400,{"error":"Invalid messages"})
         if messages[-1]["role"]!="user":
             return self.reply(400,{"error":"Last message must be user"})
-        if not MODEL_LOCK.acquire(blocking=False):
-            return self.reply(429,{"error":"Model busy"})
+        admission=MODEL_QUEUE.acquire()
+        if admission!="ready":
+            return self.reply(429,{"error":"Model queue full" if admission=="full" else "Model wait timeout"})
         try:
             try:
                 allowed,_=QUOTAS.reserve(user)
@@ -143,7 +146,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(503,{"error":"Local model unavailable"})
             return self.reply(200,{"reply":answer})
         finally:
-            MODEL_LOCK.release()
+            MODEL_QUEUE.release()
 
 if __name__=="__main__":
     if not ORIGIN.startswith("https://") or not INVITE_HASHES:
