@@ -1,0 +1,11 @@
+:{$PORT:8766} {
+  handle /health {
+    reverse_proxy 127.0.0.1:8767
+  }
+  handle {
+    basic_auth {
+      pilot {$MECHANICAI_AUTH_HASH}
+    }
+    reverse_proxy 127.0.0.1:8767
+  }
+}
