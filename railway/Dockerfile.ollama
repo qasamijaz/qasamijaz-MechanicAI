@@ -1,0 +1,3 @@
+FROM ollama/ollama:latest
+COPY railway/ollama-start.sh /usr/local/bin/mechanicai-ollama-start.sh
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/mechanicai-ollama-start.sh"]
