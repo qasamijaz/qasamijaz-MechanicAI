@@ -53,9 +53,24 @@ def reserve():
         _reserved += 1
         return True
 
-def generate(messages):
+def task_context(raw):
+    if not isinstance(raw, dict):
+        return ''
+    step = raw.get('step', 0)
+    if type(step) is not int or not 0 <= step <= 99:
+        step = 0
+    def clean(value, limit):
+        return value[:limit] if isinstance(value, str) else ''
+    completed = raw.get('completed', [])
+    if not isinstance(completed, list):
+        completed = []
+    completed = [clean(x, 180) for x in completed[-6:] if isinstance(x, str)]
+    state = {'step': step, 'paused': raw.get('paused') is True, 'current': clean(raw.get('current'), 500), 'issue': clean(raw.get('issue'), 180), 'completed': completed}
+    return 'Klientens foreløbige opgavestatus (brugerinput, ikke verificerede fakta): ' + json.dumps(state, ensure_ascii=False) + '. Brug denne kun som kontekst. Bekræft usikre trin og undgå at antage, at handlinger er sikkert udført.'
+
+def generate(messages, context=''):
     payload = json.dumps({"model": MODEL,
-        "messages": [{"role": "system", "content": SYSTEM}] + messages,
+        "messages": [{"role": "system", "content": SYSTEM + (" " + context if context else "")}] + messages,
         "max_tokens": 450}, ensure_ascii=False).encode()
     request = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=payload,
         headers={"Authorization": "Bearer " + API_KEY, "Content-Type": "application/json"},
@@ -106,13 +121,15 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             if length < 2 or length > 16000:
                 return self.respond(413, {"error": "For stor forespørgsel."})
-            messages = validate_messages(json.loads(self.rfile.read(length)).get("messages"))
+            body = json.loads(self.rfile.read(length))
+            messages = validate_messages(body.get("messages"))
+            context = task_context(body.get("task"))
         except (ValueError, TypeError, AttributeError, json.JSONDecodeError):
             return self.respond(400, {"error": "Ugyldig samtale."})
         if not reserve():
             return self.respond(429, {"error": "POC-kvoten er brugt."})
         try:
-            return self.respond(200, {"reply": generate(messages)})
+            return self.respond(200, {"reply": generate(messages, context)})
         except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
             return self.respond(502, {"error": "AI kunne ikke svare lige nu."})
 
