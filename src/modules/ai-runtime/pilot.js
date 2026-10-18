@@ -12,9 +12,10 @@ export async function pilotLogin(invite){
   return true;
 }
 export async function pilotLogout(){
-  if(csrf)await fetch("/v1/logout",{method:"POST",credentials:"same-origin",
-    headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:"{}"}).catch(()=>{});
+  const token=csrf;
   csrf=null;
+  if(token)await fetch("/v1/logout",{method:"POST",credentials:"same-origin",
+    headers:{"Content-Type":"application/json","X-CSRF-Token":token},body:"{}"}).catch(()=>{});
 }
 export async function generatePilotReply(history,{signal}={}){
   if(!pilotEnabled())throw new Error("Pilot AI er ikke aktiveret.");
@@ -25,7 +26,12 @@ export async function generatePilotReply(history,{signal}={}){
     body:JSON.stringify({messages}),signal});
   let data;try{data=await response.json();}catch{throw new Error("Ugyldigt svar fra pilotserver.");}
   if(response.status===401)csrf=null;
-  if(!response.ok)throw new Error(String(data?.error||"Pilotserver utilgængelig.").slice(0,200));
+  if(!response.ok){
+    const messages={401:"Din AI-session er udløbet. Log ind igen.",429:"AI-serveren er optaget, eller din dagskvote er brugt. Prøv igen senere.",503:"Den lokale AI-model er midlertidigt utilgængelig."};
+    const error=new Error(messages[response.status]||"Pilotserveren kunne ikke svare.");
+    error.status=response.status;
+    throw error;
+  }
   if(typeof data?.reply!=="string"||!data.reply.trim())throw new Error("Tomt AI-svar.");
   return data.reply.trim();
 }

@@ -102,7 +102,8 @@ export default function MechanicHome(){
     }catch(error){
       if(generation!==taskGeneration.current)return;
       answer(response);
-      setNotice("AI kunne ikke svare. Viser den eksisterende regelbaserede hjælp i stedet.");
+      if(error?.status===401)setPilotReady(false);
+      setNotice((error?.message||"AI kunne ikke svare.")+" Viser regelbaseret hjælp i stedet.");
     }finally{
       if(generation===taskGeneration.current){pendingRequest.current=null;setAiPending(false);}
     }
