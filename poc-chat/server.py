@@ -96,7 +96,7 @@ class Handler(BaseHTTPRequestHandler):
         if not API_KEY:
             return self.respond(503, {"error": "AI er endnu ikke aktiveret."})
         # Browser-only pilot: reject cross-origin requests. Requires HTTPS and access gate for Internet deployment.
-        if self.headers.get("Origin") and self.headers["Origin"] != os.environ.get("MECHANICAI_POC_ORIGIN", ""):
+        if self.headers.get("Origin") and self.headers["Origin"].rstrip("/") != os.environ.get("MECHANICAI_POC_ORIGIN", "").strip().strip('"\'').rstrip("/"):
             return self.respond(403, {"error": "Ugyldig oprindelse."})
         try:
             length = int(self.headers.get("Content-Length", "0"))
