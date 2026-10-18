@@ -14,7 +14,7 @@ HTML = Path(__file__).with_name("index.html")
 MODEL = os.environ.get("MECHANICAI_MODEL", "gpt-4o-mini")
 API_KEY = os.environ.get("OPENAI_API_KEY", "")
 INVITE = os.environ.get("MECHANICAI_POC_INVITE", "")
-MAX_CALLS = min(int(os.environ.get("MECHANICAI_MAX_CALLS", "30")), 200)
+MAX_CALLS = min(int(os.environ.get("MECHANICAI_MAX_CALLS", "20")), 30)
 MAX_INPUT_CHARS = 1200
 SYSTEM = ("Du er MechanicAI, en hjælpsom dansk assistent til mekanik, gør-det-selv og andre praktiske opgaver. "
           "Tal naturligt og kort, hjælp ét trin ad gangen, og stil relevante opklarende spørgsmål. "
@@ -112,5 +112,5 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(502, {"error": "AI kunne ikke svare lige nu."})
 
 if __name__ == "__main__":
-    print("MechanicAI POC listening on 127.0.0.1:8766", flush=True)
-    ThreadingHTTPServer(("127.0.0.1", int(os.environ.get("PORT", "8766"))), Handler).serve_forever()
+    print("MechanicAI POC listening on configured PORT", flush=True)
+    ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT", "8766"))), Handler).serve_forever()
