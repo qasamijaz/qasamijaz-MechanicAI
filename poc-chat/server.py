@@ -9,6 +9,7 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 HTML = Path(__file__).with_name("index.html")
 MODEL = os.environ.get("MECHANICAI_MODEL", "gpt-4o-mini")
@@ -74,9 +75,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path == "/health":
+        if urlsplit(self.path).path == "/health":
             return self.respond(200, {"ok": True, "ai_configured": bool(API_KEY and INVITE), "requests_reserved": _reserved, "max_calls": MAX_CALLS})
-        if self.path != "/":
+        if urlsplit(self.path).path != "/":
             return self.respond(404, {"error": "Ikke fundet"})
         page = HTML.read_bytes()
         self.send_response(200)
@@ -88,7 +89,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(page)
 
     def do_POST(self):
-        if self.path != "/api/chat":
+        if urlsplit(self.path).path != "/api/chat":
             return self.respond(404, {"error": "Ikke fundet"})
         if not INVITE or not hmac.compare_digest(self.headers.get("X-MechanicAI-Invite", ""), INVITE):
             return self.respond(401, {"error": "Ugyldig POC-adgangskode."})
