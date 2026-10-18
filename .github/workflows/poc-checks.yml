@@ -16,3 +16,14 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm test
       - run: npm run build
+  pilot-python-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pilot budget, gateway and quota regression tests
+        run: python -m unittest discover -s pilot -p 'test_*.py' -v
