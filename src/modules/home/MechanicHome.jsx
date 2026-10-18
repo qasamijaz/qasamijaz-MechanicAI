@@ -39,16 +39,16 @@ export default function MechanicHome(){
   }
   function speak(){
     const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SpeechRecognition){setNotice("Talegenkendelse understøttes ikke i denne browser. Brug tekstfeltet.");return;}
-    if(listening){recognition.current?.stop();return;}
+    if(!SpeechRecognition){setNotice("Talegenkendelse er ikke tilgængelig her. Tryk i tekstfeltet og brug mikrofonen på iPhone-tastaturet.");return;}
+    if(listening){recognition.current?.stop();setNotice("Optagelsen stoppes.");return;}
     try{
       const r=new SpeechRecognition();recognition.current=r;r.lang="da-DK";r.interimResults=false;
       r.onstart=()=>{setListening(true);setNotice("Jeg lytter…");};
       r.onresult=e=>{const heard=e.results?.[0]?.[0]?.transcript||"";setDraft(heard);setNotice("Talen er skrevet i feltet. Kontrollér teksten og send.");};
-      r.onerror=e=>setNotice("Mikrofon: "+e.error);
+      r.onerror=e=>setNotice("Mikrofonfejl ("+e.error+"). Kontrollér Safari-mikrofontilladelsen, eller brug iPhone-tastaturets diktering.");
       r.onend=()=>setListening(false);
-      r.start();
-    }catch{setNotice("Mikrofonen kunne ikke startes.");setListening(false);}
+      setNotice("Starter talegenkendelse…");r.start();
+    }catch{setNotice("Mikrofonen kunne ikke startes. Brug mikrofonen på iPhone-tastaturet.");setListening(false);}
   }
   function choosePhoto(e){
     const f=e.target.files?.[0];if(!f)return;
