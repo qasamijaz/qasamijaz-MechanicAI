@@ -4,10 +4,14 @@ import {createGuide,moveGuide,guidePrompt} from "../guidance/guideEngine.js";
 import {guideInterruption} from "../guidance/guideInterruption.js";
 import ManualUpload from "../evidence/ManualUpload.jsx";
 import LegacyApp from "../../App.jsx";
+import {pilotEnabled,generatePilotReply} from "../ai-runtime/pilot.js";
 import "./home.css";
 
 export default function MechanicHome(){
   const [draft,setDraft]=useState("");
+  const [aiPending,setAiPending]=useState(false);
+  const pendingRequest=useRef(null);
+  const taskGeneration=useRef(0);
   const [messages,setMessages]=useState([]);
   const [context,setContext]=useState(emptyContext);
   const [guide,setGuide]=useState(null);
@@ -28,7 +32,7 @@ export default function MechanicHome(){
   const recognition=useRef(null);
   const recognitionId=useRef(0);
   const photoUrl=useRef(null);
-  useEffect(()=>()=>{recognitionId.current++;recognition.current?.abort();speechToken.current++;window.speechSynthesis?.cancel();if(photoUrl.current)URL.revokeObjectURL(photoUrl.current);},[]);
+  useEffect(()=>()=>{taskGeneration.current++;pendingRequest.current?.abort();recognitionId.current++;recognition.current?.abort();speechToken.current++;window.speechSynthesis?.cancel();if(photoUrl.current)URL.revokeObjectURL(photoUrl.current);},[]);
   function stopSpeech(){speechToken.current++;window.speechSynthesis?.cancel();utterance.current=null;setSpeechState("idle");}
   function readAloud(value){
     if(!voiceEnabled.current||!window.speechSynthesis||!window.SpeechSynthesisUtterance)return;
@@ -55,7 +59,8 @@ export default function MechanicHome(){
     setListening(false);
     setNotice("Mikrofonen er stoppet.");
   }
-  function send(value=draft){
+  async function send(value=draft){
+    if(aiPending)return;
     const input=value.trim();if(!input)return;
     if(recognition.current)stopListening();
     if(guide && /^(næste|videre|fortsæt)$/i.test(input)){const moved=moveGuide(guide,1);setGuide(moved);setMessages(prev=>[...prev,{role:"user",text:input}]);answer(guidePrompt(moved));setDraft("");return;}
@@ -67,8 +72,24 @@ export default function MechanicHome(){
     setContext(next);
     if(next.task!==context.task || next.maker!==context.maker || next.model!==context.model || next.year!==context.year)setGuide(null);
     const response=replyFor(next);
-    setMessages(prev=>[...prev,{role:"user",text:input}]);answer(response);
+    const history=[...messages,{role:"user",text:input}];
+    setMessages(history);
     setDraft("");
+    if(!pilotEnabled()){answer(response);return;}
+    const generation=taskGeneration.current;
+    const controller=new AbortController();
+    pendingRequest.current=controller;
+    setAiPending(true);
+    try{
+      const reply=await generatePilotReply(history,{signal:controller.signal});
+      if(generation===taskGeneration.current)answer(reply);
+    }catch(error){
+      if(generation!==taskGeneration.current)return;
+      answer(response);
+      setNotice("AI kunne ikke svare. Viser den eksisterende regelbaserede hjælp i stedet.");
+    }finally{
+      if(generation===taskGeneration.current){pendingRequest.current=null;setAiPending(false);}
+    }
   }
   function speak(){
     stopSpeech();
@@ -103,12 +124,12 @@ export default function MechanicHome(){
     <div className="mh-speech-controls"><button type="button" onClick={toggleVoice}>{voiceOn?"🔊 Talesvar til":"🔇 Talesvar fra"}</button><button type="button" disabled={speechState==="idle"} onClick={pauseSpeech}>{speechState==="paused"?"▶ Fortsæt tale":"⏸ Pause tale"}</button><button type="button" disabled={speechState==="idle"} onClick={stopSpeech}>■ Stop tale</button></div>
     <form className="mh-compose" onSubmit={e=>{e.preventDefault();send();}}>
       <label htmlFor="mh-input">Skriv til din assistent</label>
-      <div className="mh-input-row"><textarea id="mh-input" rows="2" placeholder="Fx: Jeg skal skifte olie på min motorcykel…" value={draft} onChange={e=>setDraft(e.target.value)}/><button type="submit" disabled={!draft.trim()} aria-label="Send besked">➜</button></div>
-      <div className="mh-actions"><button type="button" onClick={()=>setAttachments(v=>!v)}>＋ Vedhæft</button><button type="button" onClick={()=>setTechnical(v=>!v)}>▣ Teknisk visning</button><button type="button" onClick={()=>{stopSpeech();stopListening();setMessages([]);setContext(emptyContext());setGuide(null);setDraft("");}}>Ny opgave</button></div>
+      <div className="mh-input-row"><textarea id="mh-input" rows="2" placeholder="Fx: Jeg skal skifte olie på min motorcykel…" value={draft} onChange={e=>setDraft(e.target.value)}/><button type="submit" disabled={!draft.trim()||aiPending} aria-label="Send besked">➜</button></div>
+      {aiPending&&<p role="status">AI tænker…</p>}<div className="mh-actions"><button type="button" onClick={()=>setAttachments(v=>!v)}>＋ Vedhæft</button><button type="button" onClick={()=>setTechnical(v=>!v)}>▣ Teknisk visning</button><button type="button" onClick={()=>{taskGeneration.current++;pendingRequest.current?.abort();pendingRequest.current=null;setAiPending(false);stopSpeech();stopListening();setMessages([]);setContext(emptyContext());setGuide(null);setDraft("");}}>Ny opgave</button></div>
     </form>
     {notice&&<p className="mh-notice" role="status">{notice}</p>}
     {attachments&&<section className="mh-panel"><h2>Vedhæft dokumentation</h2><label>📷 Vælg billede <input type="file" accept="image/*" onChange={choosePhoto}/></label>{photo&&<img src={photo} alt="Dit valgte foto" className="mh-photo"/>}<button type="button" onClick={()=>setPdfOpen(v=>!v)}>📄 {pdfOpen?"Skjul PDF-upload":"Upload PDF-manual"}</button>{pdfOpen&&<ManualUpload/>}</section>}
     {technical&&<section className="mh-panel"><h2>Tekniske værktøjer</h2><p>Tegninger og 3D er valgfrie. Den nuværende 3D-model er kun en illustration og ikke en verificeret model af dit køretøj.</p><button type="button" onClick={()=>{stopListening();setLegacy(true);}}>Åbn eksisterende teknisk demo →</button></section>}
-    <footer className="mh-footer">Prototype: Opgavesamtalen bruger en regelbaseret motor, ikke generativ AI. Kontroller altid modelspecifikke og sikkerhedskritiske instruktioner i verificeret dokumentation.</footer>
+    <footer className="mh-footer">Prototype: {pilotEnabled()?"AI-pilot aktiveret; svar er ikke verificerede reparationsinstruktioner.":"Opgavesamtalen bruger en regelbaseret motor, ikke generativ AI."} Kontroller altid modelspecifikke og sikkerhedskritiske instruktioner i verificeret dokumentation.</footer>
   </main>;
 }
