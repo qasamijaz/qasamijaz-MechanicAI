@@ -6,3 +6,5 @@
 .mh-speech-controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:8px 0 12px}.mh-speech-controls button{font-size:13px;padding:10px 12px}
 
 .mh-listening-controls{display:flex;justify-content:center;align-items:center;gap:12px;margin:6px 0;font-size:13px;color:#b9cad7}.mh-listening-controls button{padding:9px 12px}
+
+.mh-panel form{display:flex;flex-direction:column;gap:10px}.mh-panel form label{font-size:13px;color:#b8c7d5}.mh-panel form input{background:#0d1a29;color:#fff;border:1px solid #3d5064;border-radius:12px;padding:12px;font:inherit;max-width:100%}.mh-panel form button{align-self:flex-start}
