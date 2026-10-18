@@ -4,10 +4,17 @@ import {createGuide,moveGuide,guidePrompt} from "../guidance/guideEngine.js";
 import {guideInterruption} from "../guidance/guideInterruption.js";
 import ManualUpload from "../evidence/ManualUpload.jsx";
 import LegacyApp from "../../App.jsx";
+import {pilotEnabled,pilotAuthenticated,pilotLogin,pilotLogout,generatePilotReply} from "../ai-runtime/pilot.js";
 import "./home.css";
 
 export default function MechanicHome(){
   const [draft,setDraft]=useState("");
+  const [aiPending,setAiPending]=useState(false);
+  const [pilotInvite,setPilotInvite]=useState("");
+  const [pilotReady,setPilotReady]=useState(false);
+  const [pilotLoginPending,setPilotLoginPending]=useState(false);
+  const pendingRequest=useRef(null);
+  const taskGeneration=useRef(0);
   const [messages,setMessages]=useState([]);
   const [context,setContext]=useState(emptyContext);
   const [guide,setGuide]=useState(null);
@@ -28,7 +35,7 @@ export default function MechanicHome(){
   const recognition=useRef(null);
   const recognitionId=useRef(0);
   const photoUrl=useRef(null);
-  useEffect(()=>()=>{recognitionId.current++;recognition.current?.abort();speechToken.current++;window.speechSynthesis?.cancel();if(photoUrl.current)URL.revokeObjectURL(photoUrl.current);},[]);
+  useEffect(()=>()=>{taskGeneration.current++;pendingRequest.current?.abort();recognitionId.current++;recognition.current?.abort();speechToken.current++;window.speechSynthesis?.cancel();if(photoUrl.current)URL.revokeObjectURL(photoUrl.current);},[]);
   function stopSpeech(){speechToken.current++;window.speechSynthesis?.cancel();utterance.current=null;setSpeechState("idle");}
   function readAloud(value){
     if(!voiceEnabled.current||!window.speechSynthesis||!window.SpeechSynthesisUtterance)return;
@@ -55,7 +62,21 @@ export default function MechanicHome(){
     setListening(false);
     setNotice("Mikrofonen er stoppet.");
   }
-  function send(value=draft){
+  async function loginPilot(e){
+    e.preventDefault();
+    if(!pilotInvite.trim()||pilotLoginPending)return;
+    setPilotLoginPending(true);
+    try{await pilotLogin(pilotInvite.trim());setPilotReady(true);setNotice("Pilotadgang godkendt.");}
+    catch{setPilotReady(false);setNotice("Invitationen kunne ikke godkendes. Kontrollér koden eller prøv senere.");}
+    finally{setPilotInvite("");setPilotLoginPending(false);}
+  }
+  async function logoutPilot(){
+    taskGeneration.current++;pendingRequest.current?.abort();pendingRequest.current=null;setAiPending(false);
+    await pilotLogout();setPilotReady(false);setMessages([]);setContext(emptyContext());setGuide(null);
+    setNotice("Du er logget ud af AI-piloten.");
+  }
+  async function send(value=draft){
+    if(aiPending)return;
     const input=value.trim();if(!input)return;
     if(recognition.current)stopListening();
     if(guide && /^(næste|videre|fortsæt)$/i.test(input)){const moved=moveGuide(guide,1);setGuide(moved);setMessages(prev=>[...prev,{role:"user",text:input}]);answer(guidePrompt(moved));setDraft("");return;}
@@ -67,8 +88,25 @@ export default function MechanicHome(){
     setContext(next);
     if(next.task!==context.task || next.maker!==context.maker || next.model!==context.model || next.year!==context.year)setGuide(null);
     const response=replyFor(next);
-    setMessages(prev=>[...prev,{role:"user",text:input}]);answer(response);
+    const history=[...messages,{role:"user",text:input}];
+    setMessages(history);
     setDraft("");
+    if(!pilotEnabled()||!pilotAuthenticated()){answer(response);return;}
+    const generation=taskGeneration.current;
+    const controller=new AbortController();
+    pendingRequest.current=controller;
+    setAiPending(true);
+    try{
+      const reply=await generatePilotReply(history,{signal:controller.signal});
+      if(generation===taskGeneration.current)answer(reply);
+    }catch(error){
+      if(generation!==taskGeneration.current)return;
+      answer(response);
+      if(error?.status===401)setPilotReady(false);
+      setNotice((error?.message||"AI kunne ikke svare.")+" Viser regelbaseret hjælp i stedet.");
+    }finally{
+      if(generation===taskGeneration.current){pendingRequest.current=null;setAiPending(false);}
+    }
   }
   function speak(){
     stopSpeech();
@@ -96,6 +134,7 @@ export default function MechanicHome(){
   return <main className="mh">
     <header className="mh-header"><div className="mh-brand"><span className="mh-logo">⚙</span><strong>MechanicAI</strong></div><button className="mh-menu" onClick={()=>setTechnical(v=>!v)} aria-expanded={technical}>Værktøjer ☰</button></header>
     <section className={"mh-hero "+(messages.length?"mh-hero-compact":"")}><span className="mh-kicker">DIN ASSISTENT I VÆRKSTEDET</span><h1>Hvad skal vi fikse i dag?</h1><p>Fortæl mig, hvad du arbejder på. Vi tager det sammen, ét trin ad gangen.</p></section>
+    {pilotEnabled()&&<section className="mh-panel" aria-label="AI-pilot adgang"><h2>AI-pilot – adgang med invitation</h2>{pilotReady&&pilotAuthenticated()?<><p>Du er logget ind på AI-piloten. Dine spørgsmål sendes til pilotserveren.</p><button type="button" onClick={logoutPilot}>Log ud af AI-piloten</button></>:<><p>Kun inviterede testbrugere. Indtast din personlige invitationskode for at bruge AI.</p><form onSubmit={loginPilot}><label htmlFor="mh-pilot-invite">Invitationskode</label><input id="mh-pilot-invite" type="password" autoComplete="off" value={pilotInvite} onChange={e=>setPilotInvite(e.target.value)} maxLength={256} required/><button type="submit" disabled={pilotLoginPending||!pilotInvite.trim()}>{pilotLoginPending?"Kontrollerer…":"Log ind på AI-pilot"}</button></form><p>Uden login kan du stadig bruge den regelbaserede assistent.</p></>}</section>}
     {context.task&&<section className="mh-guide"><div><strong>Aktuel opgave</strong><p>{[context.task,context.maker,context.model,context.year].filter(Boolean).join(" · ")}</p></div><button type="button" onClick={()=>{const g=createGuide(context);setGuide(g);answer(guidePrompt(g));}}>Start trinvis guide</button>{guide&&<div className="mh-guide-controls"><span>Trin {guide.index+1} / {guide.steps.length}</span><button type="button" disabled={guide.index===0} onClick={()=>{const g=moveGuide(guide,-1);setGuide(g);answer(guidePrompt(g));}}>← Tilbage</button><button type="button" disabled={guide.index===guide.steps.length-1} onClick={()=>{const g=moveGuide(guide,1);setGuide(g);answer(guidePrompt(g));}}>Næste →</button></div>}</section>}
     {messages.length>0&&<section ref={chatScroll} className="mh-chat" aria-label="Samtale" aria-live="polite">{messages.map((m,i)=><div key={i} className={"mh-bubble "+m.role}>{m.text}</div>)}</section>}
     <div className={"mh-voice "+(messages.length?"mh-voice-compact":"")}><button type="button" onClick={speak} className={"mh-mic "+(listening?"active":"")} aria-label={listening?"Stop optagelse":"Tal til assistenten"}>🎙</button><span>{listening?"Lytter…":"Tryk og tal"}</span></div>
@@ -103,12 +142,12 @@ export default function MechanicHome(){
     <div className="mh-speech-controls"><button type="button" onClick={toggleVoice}>{voiceOn?"🔊 Talesvar til":"🔇 Talesvar fra"}</button><button type="button" disabled={speechState==="idle"} onClick={pauseSpeech}>{speechState==="paused"?"▶ Fortsæt tale":"⏸ Pause tale"}</button><button type="button" disabled={speechState==="idle"} onClick={stopSpeech}>■ Stop tale</button></div>
     <form className="mh-compose" onSubmit={e=>{e.preventDefault();send();}}>
       <label htmlFor="mh-input">Skriv til din assistent</label>
-      <div className="mh-input-row"><textarea id="mh-input" rows="2" placeholder="Fx: Jeg skal skifte olie på min motorcykel…" value={draft} onChange={e=>setDraft(e.target.value)}/><button type="submit" disabled={!draft.trim()} aria-label="Send besked">➜</button></div>
-      <div className="mh-actions"><button type="button" onClick={()=>setAttachments(v=>!v)}>＋ Vedhæft</button><button type="button" onClick={()=>setTechnical(v=>!v)}>▣ Teknisk visning</button><button type="button" onClick={()=>{stopSpeech();stopListening();setMessages([]);setContext(emptyContext());setGuide(null);setDraft("");}}>Ny opgave</button></div>
+      <div className="mh-input-row"><textarea id="mh-input" rows="2" placeholder="Fx: Jeg skal skifte olie på min motorcykel…" value={draft} onChange={e=>setDraft(e.target.value)}/><button type="submit" disabled={!draft.trim()||aiPending} aria-label="Send besked">➜</button></div>
+      {aiPending&&<p role="status">AI tænker…</p>}<div className="mh-actions"><button type="button" onClick={()=>setAttachments(v=>!v)}>＋ Vedhæft</button><button type="button" onClick={()=>setTechnical(v=>!v)}>▣ Teknisk visning</button><button type="button" onClick={()=>{taskGeneration.current++;pendingRequest.current?.abort();pendingRequest.current=null;setAiPending(false);stopSpeech();stopListening();setMessages([]);setContext(emptyContext());setGuide(null);setDraft("");}}>Ny opgave</button></div>
     </form>
     {notice&&<p className="mh-notice" role="status">{notice}</p>}
     {attachments&&<section className="mh-panel"><h2>Vedhæft dokumentation</h2><label>📷 Vælg billede <input type="file" accept="image/*" onChange={choosePhoto}/></label>{photo&&<img src={photo} alt="Dit valgte foto" className="mh-photo"/>}<button type="button" onClick={()=>setPdfOpen(v=>!v)}>📄 {pdfOpen?"Skjul PDF-upload":"Upload PDF-manual"}</button>{pdfOpen&&<ManualUpload/>}</section>}
     {technical&&<section className="mh-panel"><h2>Tekniske værktøjer</h2><p>Tegninger og 3D er valgfrie. Den nuværende 3D-model er kun en illustration og ikke en verificeret model af dit køretøj.</p><button type="button" onClick={()=>{stopListening();setLegacy(true);}}>Åbn eksisterende teknisk demo →</button></section>}
-    <footer className="mh-footer">Prototype: Opgavesamtalen bruger en regelbaseret motor, ikke generativ AI. Kontroller altid modelspecifikke og sikkerhedskritiske instruktioner i verificeret dokumentation.</footer>
+    <footer className="mh-footer">Prototype: {pilotEnabled()&&pilotReady?"AI-pilot aktiveret; svar er ikke verificerede reparationsinstruktioner.":"Opgavesamtalen bruger en regelbaseret motor, ikke generativ AI."} Kontroller altid modelspecifikke og sikkerhedskritiske instruktioner i verificeret dokumentation.</footer>
   </main>;
 }
