@@ -2,3 +2,5 @@
 .mh-guide{border:1px solid #3e6672;border-radius:16px;padding:14px;background:#102c39;display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:12px 0}.mh-guide p{margin:4px 0 0;color:#bdd0d8;font-size:13px}.mh-guide-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%}.mh-guide-controls span{margin-right:auto;font-size:13px;color:#b8ced9}.mh-guide-controls button{padding:9px 12px}
 
 .mh-hero-compact{margin:4px auto 10px}.mh-hero-compact .mh-kicker,.mh-hero-compact p{display:none}.mh-hero-compact h1{font-size:20px;margin:5px 0;text-align:left}.mh-voice-compact{flex-direction:row;justify-content:center;margin:12px 0;gap:16px}.mh .mh-voice-compact .mh-mic{width:58px;height:58px;font-size:27px;box-shadow:0 0 0 4px #23415455}.mh-chat{overscroll-behavior:contain;scrollbar-gutter:stable;min-height:80px;max-height:min(42dvh,380px)}
+
+.mh-speech-controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:8px 0 12px}.mh-speech-controls button{font-size:13px;padding:10px 12px}
