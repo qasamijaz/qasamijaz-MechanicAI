@@ -14,7 +14,7 @@ button{border:0;border-radius:12px;background:#46c9ba;color:#06272d;font-weight:
 .examples button,.secondary{color:#dcebf2;background:#284057;font-weight:500}
 #composer{padding:12px 16px 18px;border-top:1px solid #2b3c51;display:grid;gap:8px}
 form{display:flex;align-items:end;gap:9px}textarea{min-height:52px;max-height:140px;resize:vertical;flex:1;min-width:0;border:1px solid #496278;border-radius:12px;background:#0e1a29;color:#fff;padding:12px;font:inherit}button:disabled{opacity:.55}
-.sub{font-size:12px;color:#b0bfca;line-height:1.5}#status{font-size:13px;color:#8cddcf;min-height:18px}
+.voicebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.voicebar button{padding:9px 12px}.voicebar label{font-size:13px;color:#b0bfca;display:flex;align-items:center;gap:6px}.sub{font-size:12px;color:#b0bfca;line-height:1.5}#status{font-size:13px;color:#8cddcf;min-height:18px}
 @media(max-width:540px){header{padding:13px}.brand{font-size:17px}.bubble{max-width:94%}.title{margin:8vh auto 0}}
 </style></head><body><main><header><span class="brand">🔧 MechanicAI</span><span class="tag">LUKKET POC</span></header>
 <div id="feed"><section id="welcome" class="title"><h1>Hvad skal vi hjælpe dig med?</h1><p>Fortæl mig om opgaven. Vi finder næste skridt sammen – som en samtale.</p><div class="examples">
@@ -23,20 +23,25 @@ form{display:flex;align-items:end;gap:9px}textarea{min-height:52px;max-height:14
 <button data-prompt="Min opvaskemaskine vil ikke starte. Hvordan fejlsøger jeg?">🛠️ Fejlfinding</button>
 </div></section></div>
 <div id="composer"><div id="status" role="status">Klar til samtale</div><form id="form"><textarea id="message" rows="2" placeholder="Beskriv din opgave…" aria-label="Din besked" maxlength="1200" required></textarea><button type="submit" id="send">Send</button></form>
-<div><button class="secondary" type="button" id="clear">Ny samtale</button></div><div class="sub">AI kan tage fejl. Tekniske specifikationer og sikkerhedskritiske anvisninger kræver verificeret dokumentation. Undlad personfølsomme oplysninger. Billeder er ikke tilsluttet endnu.</div></div></main>
+<div class="voicebar"><button class="secondary" type="button" id="clear">Ny samtale</button><button class="secondary" type="button" id="mic">🎙️ Tal</button><button class="secondary" type="button" id="repeat">🔊 Læs svar</button><label><input type="checkbox" id="autovoice"> Oplæs AI-svar</label></div><div class="sub">AI kan tage fejl. Tekniske specifikationer og sikkerhedskritiske anvisninger kræver verificeret dokumentation. Undlad personfølsomme oplysninger. Billeder er ikke tilsluttet endnu.</div></div></main>
 <script>
 const feed=document.querySelector('#feed'),input=document.querySelector('#message'),send=document.querySelector('#send'),status=document.querySelector('#status');
+let lastReply='',recognition=null;const mic=document.querySelector('#mic'),repeat=document.querySelector('#repeat'),autovoice=document.querySelector('#autovoice');
+function speak(text){if(!('speechSynthesis' in window)){status.textContent='Oplæsning understøttes ikke her';return}window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(text.replace(/[*#]/g,''));utterance.lang='da-DK';utterance.rate=.95;window.speechSynthesis.speak(utterance)}
+repeat.onclick=()=>{if(lastReply)speak(lastReply);else status.textContent='Intet AI-svar at læse op endnu'};
+const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(!SpeechRecognition){mic.disabled=true;mic.title='Taleinput understøttes ikke af denne browser'}else{mic.onclick=()=>{if(busy)return;if(recognition){recognition.stop();return}recognition=new SpeechRecognition();recognition.lang='da-DK';recognition.interimResults=false;recognition.onresult=e=>{input.value=(input.value+' '+e.results[0][0].transcript).trim();status.textContent='Tale genkendt – tryk Send';input.focus()};recognition.onerror=()=>{status.textContent='Taleinput fejlede – brug tekstfeltet'};recognition.onend=()=>{recognition=null;mic.textContent='🎙️ Tal'};mic.textContent='Stop optagelse';try{recognition.start()}catch{recognition=null;mic.textContent='🎙️ Tal'}}}
 let turns=[],invite=sessionStorage.getItem('mechanicai_poc_invite')||'',busy=false;
 function bubble(role,text){document.querySelector('#welcome')?.remove();const node=document.createElement('div');node.className='bubble '+role;node.textContent=text;feed.append(node);feed.scrollTop=feed.scrollHeight;return node}
 document.querySelectorAll('[data-prompt]').forEach(b=>b.onclick=()=>{input.value=b.dataset.prompt;input.focus()});
-document.querySelector('#clear').onclick=()=>{if(busy)return;turns=[];feed.innerHTML='<section class="title"><h1>Ny samtale</h1><p>Hvad arbejder du på?</p></section>';status.textContent='Klar til samtale';input.focus()};
+document.querySelector('#clear').onclick=()=>{if(busy)return;turns=[];lastReply='';window.speechSynthesis?.cancel();feed.innerHTML='<section class="title"><h1>Ny samtale</h1><p>Hvad arbejder du på?</p></section>';status.textContent='Klar til samtale';input.focus()};
 document.querySelector('#form').onsubmit=async e=>{
  e.preventDefault();if(busy)return;const text=input.value.trim();if(!text)return;
  if(!invite){invite=prompt('Indtast din private POC-adgangskode')?.trim()||'';if(!invite)return;sessionStorage.setItem('mechanicai_poc_invite',invite)}
  input.value='';turns.push({role:'user',content:text});bubble('user',text);const reply=bubble('assistant','Et øjeblik, jeg undersøger…');busy=true;send.disabled=true;status.textContent='MechanicAI tænker…';
  try{const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json','X-MechanicAI-Invite':invite},body:JSON.stringify({messages:turns.slice(-10)})});
  const result=await response.json();if(!response.ok)throw new Error(result.error||'AI-serveren kunne ikke svare');
- reply.textContent=result.reply;turns.push({role:'assistant',content:result.reply});status.textContent='Klar til næste spørgsmål';
+ reply.textContent=result.reply;lastReply=result.reply;if(autovoice.checked)speak(result.reply);turns.push({role:'assistant',content:result.reply});status.textContent='Klar til næste spørgsmål';
  }catch(err){reply.textContent='Kunne ikke få AI-svar: '+err.message;status.textContent='Prøv igen';if(/adgangskode/i.test(err.message)){invite='';sessionStorage.removeItem('mechanicai_poc_invite')}}
  finally{busy=false;send.disabled=false;feed.scrollTop=feed.scrollHeight;input.focus()}
 };
