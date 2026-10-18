@@ -13,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from auth_store import Sessions
 from quota_store import QuotaStore
+from login_limiter import LoginLimiter
 
 HOST = "127.0.0.1"
 MODEL = os.getenv("PILOT_MODEL", "qwen2.5:3b")
@@ -23,14 +24,16 @@ SYSTEM = ("Du er en hjælpsom dansk assistent. Du har ikke verificerede manualer
           "Opfind ikke momentværdier, kilder eller modelspecifikke procedurer.")
 AUTH = None
 QUOTAS = None
+LOGIN_LIMITER = None
 MODEL_LOCK = threading.BoundedSemaphore(1)
 
 def configure(data_dir=None, invite_hashes=None, per_user=30, global_limit=300):
-    global AUTH, QUOTAS
+    global AUTH, QUOTAS, LOGIN_LIMITER
     folder = Path(data_dir) if data_dir else DATA_DIR
     folder.mkdir(parents=True, exist_ok=True)
     AUTH = Sessions(folder / "sessions.sqlite", INVITE_HASHES if invite_hashes is None else invite_hashes)
     QUOTAS = QuotaStore(folder / "quotas.sqlite", per_user_daily=per_user, global_daily=global_limit)
+    LOGIN_LIMITER = LoginLimiter(folder / "login.sqlite", max_attempts=int(os.getenv("PILOT_LOGIN_ATTEMPTS_PER_15MIN", "12")))
 
 def inference(messages):
     body = json.dumps({"model": MODEL, "messages": [{"role":"system","content":SYSTEM}] + messages,
@@ -96,7 +99,12 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError,TypeError,OverflowError):
             return self.reply(400,{"error":"Invalid request"})
         if self.path=="/v1/login":
-            # Loopback only. Public deployment must add IP-based login throttling.
+            try:
+                allowed = LOGIN_LIMITER is not None and LOGIN_LIMITER.reserve()
+            except Exception:
+                return self.reply(503,{"error":"Login temporarily unavailable"})
+            if not allowed:
+                return self.reply(429,{"error":"Too many login attempts"})
             login=AUTH.login(data.get("invite"))
             if not login:
                 return self.reply(401,{"error":"Invalid invite"})
