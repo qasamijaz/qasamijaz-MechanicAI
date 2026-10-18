@@ -124,3 +124,24 @@ Ingen ændringer i eksisterende MechanicAI cloud-service eller DeenRoutine uden 
 
 ---
 *Dette dokument beskriver retning og hypoteser, ikke allerede implementerede funktioner eller dokumenteret markedsstørrelse.*
+
+## 11. Multimodal slutoplevelse — voice-first, ikke voice-only (besluttet 2026-10-18)
+
+**Bindende produktretning:** MechanicAI skal ende som en naturlig **tovejs lyddialog**, mens **tekst og visuel vejledning** altid kan bruges parallelt eller alene. Den nuværende tekstchat er et teknisk første trin, ikke den tilsigtede slutoplevelse.
+
+### Brugeroplevelse
+- **Lyd (primær):** Brugeren taler frit med assistenten og får korte, oplæste svar. Støt tydelige kontrolkommandoer som »næste«, »gentag«, »vent« og »stop«. Undgå unødige afbrydelser fra værkstedsstøj; brug robust turtagning og en tilgængelig manuel kontrol.
+- **Tekst (fuldgyldig alternativ kanal):** Vis og bevar instruktioner, dialog, kilder, advarsler og trinstatus. Brugeren kan skrive i stedet for at tale, og lyd kan slås fra.
+- **Visuelt (kontekst):** Synkroniser relevante fotos, annoterede diagrammer og senere 3D-komponenter med det aktive trin. Ingen markering uden verificeret kobling mellem maskinvariant, komponent og visualisering.
+- **Samme opgavestatus på tværs af kanaler:** Tale, tekst og visualisering skal styres af én fælles task state engine. »Næste« skifter ikke kun lyd, men også synligt trin, instruktion og komponentfokus.
+- **Sikkerhed:** Kritiske advarsler skal være synlige i tekst, også når lyd er aktiv. Ingen automatisk udførelse af risikable handlinger; ved usikkerhed stoppes eller afklares trinnet.
+
+### Leverancerækkefølge
+1. Stabil tekstchat og dokumenteret AI-respons (nuværende POC).
+2. Struktureret trinmotor med tekstkommandoer og eksplicit trinstatus.
+3. Tovejs lydadapter med talegenkendelse, talesyntese, turtagning og værkstedsstøj-test.
+4. Synkroniseret foto/diagram for verificerede komponenter; 3D efter behov og datakvalitet.
+5. Multimodal QA på rigtige opgaver, inklusive lyd-afbrud, gentagelse, manuel overtagelse og genoptagelse.
+
+### Forretningsmæssigt kvalitetskriterium
+En voice-first oplevelse skal dokumentere **mindre behov for at slippe værktøjet, færre misforståelser, hurtigere og sikrere opgaveudførelse** end ren chat eller manual. Det er en hypotese, som skal måles — ikke en påstand om allerede bevist effekt.
