@@ -1,0 +1,21 @@
+name: Conversation POC documentation checks
+on:
+  push:
+    branches:
+      - feature/conversation-poc-isolated
+  pull_request:
+    paths:
+      - 'poc-chat/**'
+      - '.github/workflows/conversation-docs.yml'
+jobs:
+  documentation-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Python syntax validation
+        run: python -m py_compile poc-chat/docs_engine.py poc-chat/server.py poc-chat/test_docs_engine.py
+      - name: Offline documentation tests
+        run: cd poc-chat && python -m unittest -v test_docs_engine
