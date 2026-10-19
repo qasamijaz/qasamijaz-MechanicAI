@@ -26,7 +26,9 @@ SYSTEM = ("Du er MechanicAI, en hjælpsom dansk assistent til mekanik, gør-det-
           "Opfind aldrig modelspecifikke placeringer, reservedelsnumre, momentværdier, kilder eller sikkerhedsgodkendelser. "
           "Ved risikable opgaver skal du give klare sikkerhedsforbehold. "
           "Anbefal aldrig drikkevarebeholdere til spildolie; brug egnet lukket beholder og korrekt aflevering. "
-          "Ingen billed-, 3D- eller manualadgang er tilsluttet, og du må ikke påstå at kunne se en komponent.")
+          "Ingen billed-, 3D- eller manualadgang er tilsluttet, og du må ikke påstå at kunne se en komponent. "
+          "Hvis brugeren ikke kan finde en komponent, eller gentager nej, skal du stoppe op og bede om verificeret dokumentation i stedet for at gætte videre. "
+          "Foreslå ikke at løsne bolte eller afmontere dæksler for at lede efter en uidentificeret komponent.")
 _lock = threading.Lock()
 _reserved = 0
 
@@ -67,6 +69,33 @@ def task_context(raw):
     completed = [clean(x, 180) for x in completed[-6:] if isinstance(x, str)]
     state = {'step': step, 'paused': raw.get('paused') is True, 'current': clean(raw.get('current'), 500), 'issue': clean(raw.get('issue'), 180), 'completed': completed}
     return 'Klientens foreløbige opgavestatus (brugerinput, ikke verificerede fakta): ' + json.dumps(state, ensure_ascii=False) + '. Brug denne kun som kontekst. Bekræft usikre trin og undgå at antage, at handlinger er sikkert udført.'
+
+def safe_part_response(messages):
+    """Guardrail for unverified mechanical component identification.
+
+    A short deterministic response avoids model guesses when the user
+    cannot identify a part and no verified visual evidence is present.
+    """
+    user_texts = [m["content"].lower().strip() for m in messages if m["role"] == "user"]
+    if not user_texts:
+        return None
+    joined = " ".join(user_texts)
+    mechanical = any(x in joined for x in ("bundprop", "olieprop", "aftapningsprop", "drain plug"))
+    if not mechanical:
+        return None
+    last = user_texts[-1]
+    cant_find = (last in ("nej", "nej.", "no", "nope", "kan ikke finde den", "jeg kan ikke finde den")
+                 or any(x in last for x in ("hvilken bolt", "er det den", "kan ikke se", "kan ikke finde", "kan ikk finde", "fjerne dæksel", "tage dæksel af")))
+    # Do not interrupt the initial question; use the safety gate when
+    # the conversation has reached uncertain physical identification.
+    already_guided = len(user_texts) >= 3
+    if cant_find and (already_guided or "hvilken bolt" in last or "er det den" in last):
+        return ("Stop her – løsne eller fjern ikke bolte eller dæksler på et gæt. "
+                "Jeg kan ikke identificere bundproppen uden et verificeret diagram eller et billede, "
+                "der kan sammenholdes med dokumentation for den præcise model og årgang. "
+                "Kan du finde modelvarianten eller en officiel tegning fra manualen? "
+                "Ellers bør en fagperson identificere den, før du fortsætter.")
+    return None
 
 def generate(messages, context=''):
     payload = json.dumps({"model": MODEL,
@@ -126,6 +155,9 @@ class Handler(BaseHTTPRequestHandler):
             context = task_context(body.get("task"))
         except (ValueError, TypeError, AttributeError, json.JSONDecodeError):
             return self.respond(400, {"error": "Ugyldig samtale."})
+        safe_reply = safe_part_response(messages)
+        if safe_reply:
+            return self.respond(200, {"reply": safe_reply, "safety_stop": True})
         if not reserve():
             return self.respond(429, {"error": "POC-kvoten er brugt."})
         try:

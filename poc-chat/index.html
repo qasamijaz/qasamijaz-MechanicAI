@@ -22,7 +22,7 @@ form{display:flex;align-items:end;gap:9px}textarea{min-height:52px;max-height:14
 <button data-prompt="Jeg vil bygge et havehegn. Hvor starter jeg?">🪚 Byggeri</button>
 <button data-prompt="Min opvaskemaskine vil ikke starte. Hvordan fejlsøger jeg?">🛠️ Fejlfinding</button>
 </div></section></div>
-<section class="taskpanel" id="taskpanel" hidden aria-label="Guidet opgave"><div class="taskhead" id="taskhead">GUIDET OPGAVE · TRIN 1</div><div class="taskvisual" id="taskvisual">Visuel vejledning: ingen verificeret illustration for denne maskine endnu. AI må ikke gætte komponentplaceringer.</div><div id="taskmemory" class="sub" aria-live="polite"></div><div class="taskcontrols"><button class="secondary" type="button" id="next">Næste trin</button><button class="secondary" type="button" id="again">Gentag</button><button class="secondary" type="button" id="pause">Stop</button></div></section>
+<section class="taskpanel" id="taskpanel" hidden aria-label="Guidet opgave"><div class="taskhead" id="taskhead">OPGAVESTATUS · AFKLARING</div><div class="taskvisual" id="taskvisual">Visuel vejledning: ingen verificeret illustration for denne maskine endnu. AI må ikke gætte komponentplaceringer.</div><div id="taskmemory" class="sub" aria-live="polite"></div><div class="taskcontrols"><button class="secondary" type="button" id="next">Næste trin</button><button class="secondary" type="button" id="again">Gentag</button><button class="secondary" type="button" id="pause">Stop</button></div></section>
 <div id="composer"><div id="status" role="status">Klar til samtale</div><form id="form"><textarea id="message" rows="2" placeholder="Beskriv din opgave…" aria-label="Din besked" maxlength="1200" required></textarea><button type="submit" id="send">Send</button></form>
 <div class="voicebar"><button class="secondary" type="button" id="clear">Ny samtale</button><button class="secondary" type="button" id="mic">🎙️ Tal</button><button class="secondary" type="button" id="repeat">🔊 Læs svar</button><label><input type="checkbox" id="autovoice"> Oplæs AI-svar</label><label><input type="checkbox" id="handsfree"> Samtaletilstand (beta)</label></div><div class="sub">AI kan tage fejl. Tekniske specifikationer og sikkerhedskritiske anvisninger kræver verificeret dokumentation. Undlad personfølsomme oplysninger. Billeder er ikke tilsluttet endnu. Samtaletilstand kræver browserstøtte, mikrofontilladelse og aktiv skærm; iPhone Safari kan begrænse automatisk genstart.</div></div></main>
 <script>
@@ -47,7 +47,7 @@ function persist(){try{localStorage.setItem(STORAGE,JSON.stringify({version:2,tu
 function updateTask(){
  taskpanel.hidden=!task.active&&!task.paused;
  taskhead.textContent=(task.paused?'OPGAVE SAT PÅ PAUSE':'GUIDET OPGAVE')+' · TRIN '+task.step;
- taskmemory.textContent=(task.current?'Aktuelt: '+task.current+'  ':'')+(task.completed.length?'Registreret: '+task.completed.length+' afsluttede trin.  ':'')+(task.issue?'Afvigelse: '+task.issue:'');
+ taskmemory.textContent=(task.current?'Aktuelt: '+task.current+'  ':'')+(task.completed.length?'Tidligere samtaletrin: '+task.completed.length+'. Ikke fysisk verificeret.  ':'')+(task.issue?'Afvigelse: '+task.issue:'');
  $('#pause').textContent=task.paused?'Genoptag':'Stop';
 }
 function bubble(role,text){$('#welcome')?.remove();const el=document.createElement('div');el.className='bubble '+role;el.textContent=text;feed.append(el);feed.scrollTop=feed.scrollHeight;return el}
@@ -106,8 +106,8 @@ $('#form').onsubmit=async e=>{
  input.value='';stopListening();
  const previous=JSON.parse(JSON.stringify(task));
  const messages=[...turns,{role:'user',content:text}].slice(-10);
+ bubble('user',text);
  const reply=bubble('assistant','Et øjeblik, jeg undersøger…');
- bubble('user',text);feed.append(reply);
  busy=true;send.disabled=true;status.textContent='MechanicAI tænker…';
  try{
   const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json','X-MechanicAI-Invite':invite},body:JSON.stringify({messages,task})});
@@ -115,10 +115,10 @@ $('#form').onsubmit=async e=>{
   turns=messages.concat({role:'assistant',content:result.reply}).slice(-10);
   reply.textContent=result.reply;lastReply=result.reply;
   if(!task.active&&!task.paused){task.active=true;task.step=Math.max(1,task.step)}
-  else if(task.active&&(intent==='next'||intent==='progress')){if(task.current)task.completed.push(task.current.slice(0,200));task.completed=task.completed.slice(-12);task.step=Math.min(99,task.step+1)}
-  if(intent==='issue')task.issue=text.slice(0,200);else if(intent==='next'||intent==='progress')task.issue='';
+  else if(task.active&&intent==='next'){if(task.current)task.completed.push(task.current.slice(0,200));task.completed=task.completed.slice(-12);task.step=Math.min(99,task.step+1)}
+  if(result.safety_stop||intent==='issue'||/^(nej|no|nope)[.! ]*$/i.test(text)){task.issue=text.slice(0,200);if(result.safety_stop){task.paused=true;task.active=false}}else if(intent==='next')task.issue='';
   task.current=result.reply.slice(0,600);persist();updateTask();
-  status.textContent='Klar til næste spørgsmål';
+  status.textContent=result.safety_stop?'Sikkerhedsstop: dokumentation mangler':'Klar til næste spørgsmål';
   if(autovoice.checked||voiceWanted)speak(result.reply);
   else if(voiceWanted)startListening();
  }catch(err){
