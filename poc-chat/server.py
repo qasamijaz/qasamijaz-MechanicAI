@@ -10,6 +10,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
+from docs_engine import discover
 
 HTML = Path(__file__).with_name("index.html")
 MODEL = os.environ.get("MECHANICAI_MODEL", "gpt-4o-mini")
@@ -22,7 +23,7 @@ SYSTEM = ("Du er MechanicAI, en hjælpsom dansk assistent til mekanik, gør-det-
           "Stil først ét nødvendigt afklarende spørgsmål. Giv derefter højst ét konkret arbejdstrin per svar og vent på brugerens bekræftelse eller kommandoen næste. "
           "Giv aldrig en hel nummereret procedure på én gang. Ved gentag gentager du kun det aktuelle trin. Ved stop stopper du vejledningen. "
           "Skeln mellem verificeret dokumentation og generel viden. "
-          "Du har ingen verificerede manualer eller billeder i denne POC. "
+          "Du har ingen verificerede manualer eller billeder i denne POC, medmindre en serverkontrolleret kilde eksplicit bekræfter det. "
           "Opfind aldrig modelspecifikke placeringer, reservedelsnumre, momentværdier, kilder eller sikkerhedsgodkendelser. "
           "Ved risikable opgaver skal du give klare sikkerhedsforbehold. "
           "Anbefal aldrig drikkevarebeholdere til spildolie; brug egnet lukket beholder og korrekt aflevering. "
@@ -155,15 +156,39 @@ class Handler(BaseHTTPRequestHandler):
             context = task_context(body.get("task"))
         except (ValueError, TypeError, AttributeError, json.JSONDecodeError):
             return self.respond(400, {"error": "Ugyldig samtale."})
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+        self.send_header("Cache-Control", "no-store, no-transform")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        def emit(data):
+            try:
+                self.wfile.write((json.dumps(data, ensure_ascii=False) + "\n").encode("utf-8"))
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+        emit({"type": "documentation", "kind": "begin", "label": "Kildekontrol startet.", "details": {}})
+        evidence = discover(messages, emit)
+        # All evidence supplied to the LLM originates on the server; never from browser-provided provenance.
+        evidence_context = ("Dokumentationsmotorens faktiske resultat: " + json.dumps(evidence, ensure_ascii=False) +
+            ". En producentoversigt er IKKE en læst manual. Hvis procedure_verified er false, må du aldrig "
+            "oplyse præcis komponentplacering, boltspecifikationer eller fremgangsmåde som verificeret. "
+            "Brug ikke årgange på tværs. Bed brugeren bekræfte variant eller vent på godkendt dokumentation.")
         safe_reply = safe_part_response(messages)
         if safe_reply:
-            return self.respond(200, {"reply": safe_reply, "safety_stop": True})
+            emit({"type": "answer", "reply": safe_reply, "safety_stop": True,
+                  "documentation": evidence})
+            return
         if not reserve():
-            return self.respond(429, {"error": "POC-kvoten er brugt."})
+            emit({"type": "error", "error": "POC-kvoten er brugt.", "code": "quota"})
+            return
+        emit({"type": "generation", "label": "AI formulerer svar ud fra kildekontrollens resultat.", "details": {"manual_verified": False}})
         try:
-            return self.respond(200, {"reply": generate(messages, context)})
+            reply = generate(messages, context + " " + evidence_context)
+            emit({"type": "answer", "reply": reply, "documentation": evidence})
         except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
-            return self.respond(502, {"error": "AI kunne ikke svare lige nu."})
+            emit({"type": "error", "error": "AI kunne ikke svare lige nu.", "code": "provider_unavailable"})
 
 if __name__ == "__main__":
     print("MechanicAI POC listening on configured PORT", flush=True)
